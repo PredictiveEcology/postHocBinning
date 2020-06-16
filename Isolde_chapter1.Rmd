@@ -26,9 +26,11 @@ library("googledrive")
 
 # Get Landscape Data
 
+Here the LLC2005 raster layer of Canada is read in using the LandR prepInputs function. It will be used as the rasterToMatch layer for other spatial layers to reproject to match, and will also provide land cover classification data.
+
 ```{r LCC2005}
 
-rasterToMatch <- LandR::prepInputsLCC() #bring in rasterToMatch LLC2005, which will also provide land cover data
+rasterToMatch <- LandR::prepInputsLCC() 
 
 ```
 
