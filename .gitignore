@@ -5,3 +5,5 @@
 .gitignore
 Isolde_ch1_rmd.Rproj
 Isolde_chapter1.Rmd
+.Rproj.user
+README.md
