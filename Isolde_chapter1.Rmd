@@ -1,0 +1,98 @@
+---
+title: "Isolde Chapter 1"
+author: "Isolde Lane-Shaw"
+date: "6/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r packages}
+
+#list packages to load
+library("SpaDES")
+library("raster")
+library("sf")
+library("rgdal")
+library("ggplot2")
+library("googledrive")
+
+```
+
+
+# Get Landscape Data
+
+```{r LCC2005}
+
+rasterToMatch <- LandR::prepInputsLCC() #bring in rasterToMatch LLC2005, which will also provide land cover data
+
+```
+
+```{r studyArea, echo=FALSE}
+
+nameAreaShapefile <- "RIA_fiveTSA.shp" #specify file name
+folderUrlArea <- "https://drive.google.com/open?id=15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB" #give file location 
+archiveArea <- "RIA_fiveTSA.zip" #give archive name
+
+studyArea <- prepInputs(targetFile = nameAreaShapefile, 
+                            url = folderUrlArea,
+                            archive = archiveArea, 
+                            alsoExtract = "similar",
+                            destinationPath = paste0(getwd(),"/studyArea"),
+                            fun = "raster::shapefile",
+                            rasterToMatch = rasterToMatch,
+                            overwrite = TRUE)
+
+```
+
+
+# Create Dataframe of Landscape Data for the Desired Study Area
+
+```{r cropAndMask}
+
+landscapeRaster <- raster::crop(rasterToMatch,studyArea) #create landscapeRaster by cropping rasterToMatch to studyArea
+landscapeRaster <- mask(landscapeRaster, studyArea) #mask landscapeRaster to studyArea
+plot(landscapeRaster) #double check landscapeRaster 
+
+```
+
+
+```{r createDataframe}
+
+landscapeValues <- getValues(landscapeRaster) #get the values of the cells in the landscapeRaster
+landscapeValues <- landscapeValues[!is.na(landscapeValues)] #get rid of NAs
+landscapeDF <- as.data.frame(table(landscapeValues)) #get counts of each category, put into dataframe
+
+```
+
+
+```{r plotLandscapeCategoryCounts, echo = FALSE}
+
+landCatPlot <- ggplot(landscapeDF) + geom_bar(aes(x=landscapeValues, y=Freq), stat="identity")
+print(landCatPlot) #create bar chart of freq of each landscape value category
+
+```
+
+# Get Bird Density Data
+
+```{r getBirdDensityRaster}
+
+nameBirdRaster <- "mosaic-OVEN-run3.tif" #specify file name
+folderUrlBird <- "https://drive.google.com/file/d/1dOgCljSRI7sBKYtgOvxeFV5q_g5eBGMz/view?usp=sharing" #give file location 
+archiveBird <- "birdDensityRasters.zip" #archive name
+
+birdRaster <- prepInputs(targetFile = nameBirdRaster, 
+                            url = folderUrlBird, 
+                            archive = archiveBird, 
+                            alsoExtract = "similar",
+                            destinationPath = paste0(getwd(),"/birdRasterFiles"),
+                            fun = "raster::raster",
+                            rasterToMatch = landscapeRaster,
+                            studyArea = studyArea,
+                            overwrite = TRUE)
+
+```
