@@ -34,11 +34,13 @@ rasterToMatch <- LandR::prepInputsLCC()
 
 ```
 
+Input the studyArea shapefile, specifying the file name, the url location of the file and the name of the archive it is in. 
+
 ```{r studyArea, echo=FALSE}
 
-nameAreaShapefile <- "RIA_fiveTSA.shp" #specify file name
-folderUrlArea <- "https://drive.google.com/open?id=15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB" #give file location 
-archiveArea <- "RIA_fiveTSA.zip" #give archive name
+nameAreaShapefile <- "RIA_fiveTSA.shp" #file name
+folderUrlArea <- "https://drive.google.com/open?id=15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB" #location 
+archiveArea <- "RIA_fiveTSA.zip" #archive name
 
 studyArea <- prepInputs(targetFile = nameAreaShapefile, 
                             url = folderUrlArea,
@@ -58,7 +60,7 @@ studyArea <- prepInputs(targetFile = nameAreaShapefile,
 
 landscapeRaster <- raster::crop(rasterToMatch,studyArea) #create landscapeRaster by cropping rasterToMatch to studyArea
 landscapeRaster <- mask(landscapeRaster, studyArea) #mask landscapeRaster to studyArea
-plot(landscapeRaster) #double check landscapeRaster 
+Plot(landscapeRaster) #double check landscapeRaster 
 
 ```
 
