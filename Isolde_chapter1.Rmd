@@ -34,13 +34,11 @@ rasterToMatch <- LandR::prepInputsLCC()
 
 ```
 
-Input the studyArea shapefile, specifying the file name, the url location of the file and the name of the archive it is in. 
-
 ```{r studyArea, echo=FALSE}
 
-nameAreaShapefile <- "RIA_fiveTSA.shp" #file name
-folderUrlArea <- "https://drive.google.com/open?id=15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB" #location 
-archiveArea <- "RIA_fiveTSA.zip" #archive name
+nameAreaShapefile <- "RIA_fiveTSA.shp" #specify file name
+folderUrlArea <- "https://drive.google.com/open?id=15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB" #give file location 
+archiveArea <- "RIA_fiveTSA.zip" #give archive name
 
 studyArea <- prepInputs(targetFile = nameAreaShapefile, 
                             url = folderUrlArea,
@@ -54,8 +52,6 @@ studyArea <- prepInputs(targetFile = nameAreaShapefile,
 ```
 
 
-# Create Dataframe of Landscape Data for the Desired Study Area
-
 ```{r cropAndMask}
 
 landscapeRaster <- raster::crop(rasterToMatch,studyArea) #create landscapeRaster by cropping rasterToMatch to studyArea
@@ -65,19 +61,19 @@ Plot(landscapeRaster) #double check landscapeRaster
 ```
 
 
-```{r createDataframe}
+```{r getlandscapeValues}
 
-landscapeValues <- getValues(landscapeRaster) #get the values of the cells in the landscapeRaster
-landscapeValues <- landscapeValues[!is.na(landscapeValues)] #get rid of NAs
-landscapeDF <- as.data.frame(table(landscapeValues)) #get counts of each category, put into dataframe
+# landscapeValues <- getValues(landscapeRaster) #get the values of the cells in the landscapeRaster
+# landscapeValues <- landscapeValues[!is.na(landscapeValues)] #get rid of NAs
+# #landscapeDF <- as.data.frame(table(landscapeValues)) #get counts of each category, put into dataframe
 
 ```
 
 
 ```{r plotLandscapeCategoryCounts, echo = FALSE}
 
-landCatPlot <- ggplot(landscapeDF) + geom_bar(aes(x=landscapeValues, y=Freq), stat="identity")
-print(landCatPlot) #create bar chart of freq of each landscape value category
+# landCatPlot <- ggplot(landscapeDF) + geom_bar(aes(x=landscapeValues, y=Freq), stat="identity")
+# print(landCatPlot) #create bar chart of freq of each landscape value category
 
 ```
 
@@ -98,5 +94,40 @@ birdRaster <- prepInputs(targetFile = nameBirdRaster,
                             rasterToMatch = landscapeRaster,
                             studyArea = studyArea,
                             overwrite = TRUE)
+
+plot(birdRaster) #steve says Plot() is better
+
+```
+
+```{r getbirdDensityValues}
+
+# birdDensityValues <- getValues(birdRaster) #get the values of the cells in the landscapeRaster
+# landscapeValues <- birdDensityValues[!is.na(birdDensityValues)] #get rid of NAs
+# #landscapeDF <- as.data.frame(table(landscapeValues)) #get counts of each category, put into dataframe
+
+```
+
+# Create dataframe of bird density by landscape
+
+```{r getCellValues}
+
+rasterStack <- stack(landscapeRaster, birdRaster)
+cellValues <- as.data.frame(getValues(rasterStack))
+cellValues <- na.omit(cellValues)
+cellValues$LCC2005_V1_4a <- as.factor(cellValues$LCC2005_V1_4a)
+
+```
+
+
+```{r getClassCounts}
+
+classCounts <- as.data.frame(table(cellValues[,1]))
+colnames(classCounts) <- c("landCoverClass", "classCount")
+
+```
+
+```{r getMeanBirdDensity}
+
+
 
 ```
