@@ -20,6 +20,8 @@ library("sf")
 library("rgdal")
 library("ggplot2")
 library("googledrive")
+library("data.table")
+library("plotrix") 
 
 ```
 
@@ -61,21 +63,6 @@ Plot(landscapeRaster) #double check landscapeRaster
 ```
 
 
-```{r getlandscapeValues}
-
-# landscapeValues <- getValues(landscapeRaster) #get the values of the cells in the landscapeRaster
-# landscapeValues <- landscapeValues[!is.na(landscapeValues)] #get rid of NAs
-# #landscapeDF <- as.data.frame(table(landscapeValues)) #get counts of each category, put into dataframe
-
-```
-
-
-```{r plotLandscapeCategoryCounts, echo = FALSE}
-
-# landCatPlot <- ggplot(landscapeDF) + geom_bar(aes(x=landscapeValues, y=Freq), stat="identity")
-# print(landCatPlot) #create bar chart of freq of each landscape value category
-
-```
 
 # Get Bird Density Data
 
@@ -95,39 +82,32 @@ birdRaster <- prepInputs(targetFile = nameBirdRaster,
                             studyArea = studyArea,
                             overwrite = TRUE)
 
-plot(birdRaster) #steve says Plot() is better
+plot(birdRaster)
 
 ```
 
-```{r getbirdDensityValues}
-
-# birdDensityValues <- getValues(birdRaster) #get the values of the cells in the landscapeRaster
-# landscapeValues <- birdDensityValues[!is.na(birdDensityValues)] #get rid of NAs
-# #landscapeDF <- as.data.frame(table(landscapeValues)) #get counts of each category, put into dataframe
-
-```
 
 # Create dataframe of bird density by landscape
 
 ```{r getCellValues}
 
-rasterStack <- stack(landscapeRaster, birdRaster)
-cellValues <- as.data.frame(getValues(rasterStack))
+landBirdRasterStack <- stack(landscapeRaster, birdRaster)
+cellValues <- as.data.frame(getValues(landBirdRasterStack))
 cellValues <- na.omit(cellValues)
-cellValues$LCC2005_V1_4a <- as.factor(cellValues$LCC2005_V1_4a)
+colnames(cellValues) <- c("landCoverClass", "birdDensity")
+cellValues$landCoverClass <- as.factor(cellValues$landCoverClass)
 
 ```
 
 
-```{r getClassCounts}
+```{r getCountsAndBirdMeans}
 
-classCounts <- as.data.frame(table(cellValues[,1]))
-colnames(classCounts) <- c("landCoverClass", "classCount")
-
-```
-
-```{r getMeanBirdDensity}
-
-
+dtCellValues <- data.table(cellValues)
+birdsByClass <- as.data.frame(dtCellValues[order(landCoverClass)
+                              ][,list(classCount = .(.N),
+                                      meanBirdDensity = mean(birdDensity),
+                                      varBirdDensity = var(birdDensity),
+                                      seBirdDensity = std.error(birdDensity)), 
+                                      by = landCoverClass])
 
 ```
