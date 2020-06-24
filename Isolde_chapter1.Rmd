@@ -11,6 +11,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
+# Introduction
+
+In the following code chunks, rasters showing Canadian land cover classes and predicted densities of a given bird species across Canada will be inputted. The data will be extracted and used, for a given study area, to predict expected densities of the bird for each of the land cover classes. 
+# Load essential packages
+
+We start by loading all the packages we will use.
+
 ```{r packages}
 
 #list packages to load
@@ -18,7 +25,6 @@ library("SpaDES")
 library("raster")
 library("sf")
 library("rgdal")
-library("ggplot2")
 library("googledrive")
 library("data.table")
 library("plotrix") 
@@ -36,6 +42,8 @@ rasterToMatch <- LandR::prepInputsLCC()
 
 ```
 
+The study area that we are interested in is then downloaded and read in using the prepInputs function. In this example we are using an area of North-East British Columbia. 
+
 ```{r studyArea, echo=FALSE}
 
 nameAreaShapefile <- "RIA_fiveTSA.shp" #specify file name
@@ -45,26 +53,29 @@ archiveArea <- "RIA_fiveTSA.zip" #give archive name
 studyArea <- prepInputs(targetFile = nameAreaShapefile, 
                             url = folderUrlArea,
                             archive = archiveArea, 
-                            alsoExtract = "similar",
-                            destinationPath = paste0(getwd(),"/studyArea"),
-                            fun = "raster::shapefile",
-                            rasterToMatch = rasterToMatch,
+                            alsoExtract = "similar", #Extract other files with similar names
+                            destinationPath = paste0(getwd(),"/studyArea"), #save the file to a folder in the working directory called studyArea
+                            fun = "raster::shapefile", #use the function shapefile
+                            rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
                             overwrite = TRUE)
 
 ```
 
+The landscapeRaster is then created by masking and cropping the LCC2005 rasterToMatch to the size of the given studyArea. 
 
 ```{r cropAndMask}
 
 landscapeRaster <- raster::crop(rasterToMatch,studyArea) #create landscapeRaster by cropping rasterToMatch to studyArea
 landscapeRaster <- mask(landscapeRaster, studyArea) #mask landscapeRaster to studyArea
-Plot(landscapeRaster) #double check landscapeRaster 
+plot(landscapeRaster) #visually check landscapeRaster 
 
 ```
 
 
 
 # Get Bird Density Data
+
+A raster of predicted bird densities is downloaded and loaded via prepInputs, as with the studyArea.
 
 ```{r getBirdDensityRaster}
 
@@ -77,37 +88,42 @@ birdRaster <- prepInputs(targetFile = nameBirdRaster,
                             archive = archiveBird, 
                             alsoExtract = "similar",
                             destinationPath = paste0(getwd(),"/birdRasterFiles"),
-                            fun = "raster::raster",
-                            rasterToMatch = landscapeRaster,
-                            studyArea = studyArea,
+                            fun = "raster::raster", # the function raster is used to input the file
+                            rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
+                            studyArea = studyArea, #give the studyArea for the raster to be masked to
                             overwrite = TRUE)
 
-plot(birdRaster)
+plot(birdRaster) #visually check birdRaster
 
 ```
 
 
 # Create dataframe of bird density by landscape
 
+A dataframe is created, containing the number of cells of each land cover class that are found in the landscapeRaster, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
+
+The first step is to gather the values from the rasters and create a clean dataset. 
+
 ```{r getCellValues}
 
-landBirdRasterStack <- stack(landscapeRaster, birdRaster)
-cellValues <- as.data.frame(getValues(landBirdRasterStack))
-cellValues <- na.omit(cellValues)
-colnames(cellValues) <- c("landCoverClass", "birdDensity")
-cellValues$landCoverClass <- as.factor(cellValues$landCoverClass)
+landBirdRasterStack <- stack(landscapeRaster, birdRaster) # stack the two rasters
+cellValues <- as.data.frame(getValues(landBirdRasterStack)) # take the values from the two rasters and input them to a dataframe called cellValues
+cellValues <- na.omit(cellValues) # remove any NAs
+colnames(cellValues) <- c("landCoverClass", "birdDensity") # give the columns names
+cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) # make landCoverClass categorical rather than numerical
 
 ```
 
+We then transform the data frame into a data table to calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
 
 ```{r getCountsAndBirdMeans}
 
-dtCellValues <- data.table(cellValues)
-birdsByClass <- as.data.frame(dtCellValues[order(landCoverClass)
-                              ][,list(classCount = .(.N),
-                                      meanBirdDensity = mean(birdDensity),
-                                      varBirdDensity = var(birdDensity),
-                                      seBirdDensity = std.error(birdDensity)), 
+dtCellValues <- data.table(cellValues) #make cellValues into a data table
+birdsByClass <- as.data.frame(dtCellValues[order(landCoverClass) # order the rows by the land cover class
+                              ][,list(classCount = .(.N), # get the number of cells each cover class
+                                      meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
+                                      varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
+                                      seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
                                       by = landCoverClass])
 
 ```
