@@ -28,7 +28,8 @@ library("rgdal")
 library("googledrive")
 library("data.table")
 library("plotrix") 
-
+library("ggplot2")
+library("LandR")
 ```
 
 
@@ -38,7 +39,7 @@ Here the LLC2005 raster layer of Canada is read in using the LandR prepInputs fu
 
 ```{r LCC2005}
 
-rasterToMatch <- LandR::prepInputsLCC() 
+rasterToMatch <- raster(paste0(getwd(),"/LCC2005_V1_4a.tif")) #LandR::prepInputsLCC() 
 
 ```
 
@@ -47,14 +48,15 @@ The study area that we are interested in is then downloaded and read in using th
 ```{r studyArea, echo=FALSE}
 
 nameAreaShapefile <- "RIA_fiveTSA.shp" #specify file name
-folderUrlArea <- "https://drive.google.com/open?id=15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB" #give file location 
+folderUrlArea <- "https://drive.google.com/file/d/15ufr8h19veqtxH3Rd3Qj84jWHgdEs0PB/view?usp=sharing" #give file location 
 archiveArea <- "RIA_fiveTSA.zip" #give archive name
+downloadFolderArea <- paste0(getwd(),"/studyArea") #say where to download to
 
 studyArea <- prepInputs(targetFile = nameAreaShapefile, 
                             url = folderUrlArea,
                             archive = archiveArea, 
                             alsoExtract = "similar", #Extract other files with similar names
-                            destinationPath = paste0(getwd(),"/studyArea"), #save the file to a folder in the working directory called studyArea
+                            destinationPath = downloadFolderArea, #save the file to a folder in the working directory called studyArea
                             fun = "raster::shapefile", #use the function shapefile
                             rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
                             overwrite = TRUE)
@@ -75,25 +77,114 @@ plot(landscapeRaster) #visually check landscapeRaster
 
 # Get Bird Density Data
 
-A raster of predicted bird densities is downloaded and loaded via prepInputs, as with the studyArea.
+A single raster of predicted bird densities is downloaded and loaded via prepInputs, as with the studyArea.
 
 ```{r getBirdDensityRaster}
 
-nameBirdRaster <- "mosaic-OVEN-run3.tif" #specify file name
-folderUrlBird <- "https://drive.google.com/file/d/1dOgCljSRI7sBKYtgOvxeFV5q_g5eBGMz/view?usp=sharing" #give file location 
-archiveBird <- "birdDensityRasters.zip" #archive name
+# nameBirdRaster <- "mosaic-OVEN-run3.tif" #specify file name
+# folderUrlBird <- "https://drive.google.com/file/d/1xGhYgy71-8gjjMkgBg6F2kyp4hI3Y4rl/view?usp=sharing" #give file location 
+# archiveBird <- "birdDensityRasters.zip" #archive name
+# downloadFolderBird <- paste0(getwd(),"/birdRasterFiles") #say where to download to
+# 
+# birdRaster <- prepInputs(targetFile = nameBirdRaster, 
+#                             url = folderUrlBird, 
+#                             archive = archiveBird, 
+#                             alsoExtract = "similar",
+#                             destinationPath = downloadFolderBird,
+#                             fun = "raster::raster", # the function raster is used to input the file
+#                             rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
+#                             studyArea = studyArea, #give the studyArea for the raster to be masked to
+#                             overwrite = TRUE)
+# 
+# plot(birdRaster) #visually check birdRaster
 
-birdRaster <- prepInputs(targetFile = nameBirdRaster, 
-                            url = folderUrlBird, 
-                            archive = archiveBird, 
-                            alsoExtract = "similar",
-                            destinationPath = paste0(getwd(),"/birdRasterFiles"),
-                            fun = "raster::raster", # the function raster is used to input the file
-                            rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
-                            studyArea = studyArea, #give the studyArea for the raster to be masked to
-                            overwrite = TRUE)
+```
 
-plot(birdRaster) #visually check birdRaster
+Multiple rasters of predicted bird density are downloaded, postProcessed, loaded and outputted as a raster stack. To do this we first define a function to download rasters for the chosen bird species, and output a list of the rasters that have been downloaded. 
+
+```{r functionDownloadBirdDensityRasters}
+
+downloadBirdDensityRasters <- function(folderUrl, 
+                                       birdsList, 
+                                       rastersPath){
+#load/download necessary packages
+  reproducible::Require("googledrive")
+  reproducible::Require("raster")
+#drive_ls function is used to list all the files it finds using the folder url with the given pattern
+   filesToDownload <- googledrive::drive_ls( path = as_id(folderUrl), pattern = "mosaic-")
+ #grepl function searches for all items in the filesToDownload that are on birdList & stores their names in rastersforBirdList 
+  rastersForBirdList <- filesToDownload$name[grepl(pattern = paste(birdsList, collapse = "|"), x = filesToDownload$name)]
+  
+#for each item in turn from rastersForBirdlist the following function is applied: 
+  downloadedRasters <- lapply(X = rastersForBirdList, FUN = function(rasterFile){
+#if the item in rastersForBirdList is not already present at rastersPath, googledrive package downloads it    
+        if (!file.exists(file.path(rastersPath, rasterFile))){
+      googledrive::drive_download(file = as_id(filesToDownload[filesToDownload$name %in% rasterFile, ]$id), #rasterFile,
+                                  path = file.path(rastersPath, rasterFile), overwrite = TRUE)
+    }
+#otherwise, if it is already present and downloaded, just get the name of the item
+    return(raster(file.path(rastersPath, rasterFile), verbose = TRUE))
+  })
+
+#get the species codes as names for the downloadedRasters object, rather than using the whole filepath
+   X <- lapply(rastersForBirdList, substr, 8, 11) #works for strings of the form mosaic-XXXX-run3
+   names(downloadedRasters) <- X
+#the downloadBirdDensityRasters function returns/loads the downloaded rasters
+ return(downloadedRasters)
+}
+
+```
+
+The download bird function is called by a second defined function, which postprocesses (reprojected, cropped and masked according to the given rasterToMatch and studyArea) and loads the rasters in a raster stack.   
+
+```{r functionLoadBirdDensityRasters}
+
+loadBirdDensityRasters <- function(birdsList,
+                                   folderUrl,
+                                   rastersPath,
+                                   rasterToMatch,
+                                   studyArea){
+  reproducible::Require("raster")
+#check that there is a folder at the given rastersPath. if not, create it. 
+  rastersPath <- checkPath(file.path(rastersPath), create = TRUE) 
+#download the rasters on the birdList. Return List of downloaded files.
+  downloadedRasters <- downloadBirdDensityRasters(folderUrl = folderUrl,  
+                                                  birdsList = birdsList, 
+                                                  rastersPath = rastersPath)
+  
+#lapply applys the custom function to each raster in turn
+  postprocessedRasters <- lapply(X = downloadedRasters, FUN = function(RasterLayer){
+#the function postProcesses the layer, cropping and masking it to a given study area and rasterToMatch, and saving it to a given destination path
+    proRaster <- postProcess(RasterLayer, 
+                             studyArea = studyArea, 
+                             rasterToMatch = rasterToMatch, 
+                             destinationPath = rastersPath)
+#each layer is returned into the object proRaster
+    return(proRaster)
+  })
+  
+#birdDensityRasterStack are made into a raster stack
+  birdDensityRasterStack <- raster::stack(postprocessedRasters)
+#Finally the whole function returns the birdDensityRasterStack
+    return(birdDensityRasterStack)
+}
+  
+  
+```
+
+Here, we define which bird species we want, where to download the bird density rasters from, and where to save them. It then calls the loadBirdDensityRaster function. 
+
+```{r callBirdRasterLoadFunction}
+
+birdsList <- c("BLPW", "OVEN", "CAWA") #specify the bird species 
+downloadFolderBird <- paste0(getwd(),"/birdRasterFiles") #say where to download to
+folderUrlBird <- "https://drive.google.com/drive/folders/1KIH_Uoiy7iBtbZOeHpP2kqZ2Li7yaNhe?usp=sharing" # give file location 
+
+birdDensityRasterStack <- loadBirdDensityRasters(folderUrl = folderUrlBird,
+                                                 birdsList = birdsList,
+                                                 rastersPath = downloadFolderBird,
+                                                 rasterToMatch = landscapeRaster,
+                                                 studyArea = studyArea)
 
 ```
 
@@ -106,8 +197,10 @@ The first step is to gather the values from the rasters and create a clean datas
 
 ```{r getCellValues}
 
-landBirdRasterStack <- stack(landscapeRaster, birdRaster) # stack the two rasters
-cellValues <- as.data.frame(getValues(landBirdRasterStack)) # take the values from the two rasters and input them to a dataframe called cellValues
+birdRaster <- birdDensityRasterStack$OVEN
+
+landBirdRasterStack <- stack(landscapeRaster, birdRaster) # add landscape raster to birdDensityRasterStack
+cellValues <- as.data.frame(getValues(landBirdRasterStack)) # take the values from the rasters and input them to a dataframe called cellValues
 cellValues <- na.omit(cellValues) # remove any NAs
 colnames(cellValues) <- c("landCoverClass", "birdDensity") # give the columns names
 cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) # make landCoverClass categorical rather than numerical
@@ -126,4 +219,56 @@ birdsByClass <- as.data.frame(dtCellValues[order(landCoverClass) # order the row
                                       seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
                                       by = landCoverClass])
 
+```
+
+```{r plotBirdsByClass}
+
+plotBirdsByClass <- ggplot(data = birdsByClass, aes(x =landCoverClass, y = meanBirdDensity)) + geom_bar(stat="identity") +
+geom_errorbar(aes(ymin=meanBirdDensity-seBirdDensity, ymax=meanBirdDensity+seBirdDensity), width=.1)
+plotBirdsByClass
+
+```
+
+
+```{r plotVarBirdDensity}
+
+plotVarBirdDensity <- ggplot(data = birdsByClass, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
+plotVarBirdDensity
+
+```
+
+# Input kNN Age Raster
+
+```{r getBirdDensityRaster}
+
+nameAgeRaster <- "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" #specify file name
+folderUrlAge <- "https://drive.google.com/file/d/1dBnNNUJ-esognueDN5zPsrQo3Plpi9on/view?usp=sharing" #give file location 
+archiveAge <- "kNN_rasters.zip" #archive name
+downloadFolderAge <- paste0(getwd(),"/ageRasterFiles") #say where to download to
+
+ageRaster <- prepInputs(targetFile = nameAgeRaster, 
+                            url = folderUrlAge, 
+                            archive = archiveAge, 
+                            alsoExtract = "similar",
+                            destinationPath = downloadFolderAge,
+                            fun = "raster::raster", # the function raster is used to input the file
+                            rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
+                            studyArea = studyArea, #give the studyArea for the raster to be masked to
+                            overwrite = TRUE)
+
+plot(ageRaster) #visually check ageRaster
+
+```
+
+# Get values of age raster
+
+```{r getAgeRasterValues}
+
+
+ageRasterStack <- stack(landscapeRaster, birdRaster, ageRaster) # stack the three rasters
+ageValues <- as.data.frame(getValues(ageRaster, landscapeRaster,)) # take the values from the two rasters and input them to a dataframe called cellValues
+#colnames(ageStackValues) <- c("landCoverClass", "birdDensity", "age") # give the columns names 
+ageValues <- na.omit(ageValues) # remove any NAs
+#ageStackValues$LCC2005_V1_4a <- as.factor(ageStackValues$LCC2005_V1_4a) # make landCoverClass categorical rather than numerical
+tmp <- as.data.frame(ageRasterStack)                          
 ```
