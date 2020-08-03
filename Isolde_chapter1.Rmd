@@ -39,7 +39,7 @@ Here the LLC2005 raster layer of Canada is read in using the LandR prepInputs fu
 
 ```{r LCC2005}
 
-rasterToMatch <- raster(paste0(getwd(),"/LCC2005_V1_4a.tif")) #LandR::prepInputsLCC() 
+rasterToMatch <- LandR::prepInputsLCC() 
 
 ```
 
@@ -77,9 +77,11 @@ plot(landscapeRaster) #visually check landscapeRaster
 
 # Get Bird Density Data
 
-A single raster of predicted bird densities is downloaded and loaded via prepInputs, as with the studyArea.
+
 
 ```{r getBirdDensityRaster}
+
+# A single raster of predicted bird densities is downloaded and loaded via prepInputs, as with the studyArea.
 
 # nameBirdRaster <- "mosaic-OVEN-run3.tif" #specify file name
 # folderUrlBird <- "https://drive.google.com/file/d/1xGhYgy71-8gjjMkgBg6F2kyp4hI3Y4rl/view?usp=sharing" #give file location 
@@ -100,16 +102,16 @@ A single raster of predicted bird densities is downloaded and loaded via prepInp
 
 ```
 
-Multiple rasters of predicted bird density are downloaded, postProcessed, loaded and outputted as a raster stack. To do this we first define a function to download rasters for the chosen bird species, and output a list of the rasters that have been downloaded. 
+Multiple rasters of predicted bird density are downloaded, postProcessed, loaded and output as a raster stack. To do this we first define a function to download rasters for the chosen bird species, and output a list of the rasters that have been downloaded. 
 
 ```{r functionDownloadBirdDensityRasters}
-
-downloadBirdDensityRasters <- function(folderUrl, 
-                                       birdsList, 
-                                       rastersPath){
 #load/download necessary packages
   reproducible::Require("googledrive")
   reproducible::Require("raster")
+  
+downloadBirdDensityRasters <- function(folderUrl, 
+                                       birdsList, 
+                                       rastersPath){
 #drive_ls function is used to list all the files it finds using the folder url with the given pattern
    filesToDownload <- googledrive::drive_ls( path = as_id(folderUrl), pattern = "mosaic-")
  #grepl function searches for all items in the filesToDownload that are on birdList & stores their names in rastersforBirdList 
@@ -193,46 +195,66 @@ birdDensityRasterStack <- loadBirdDensityRasters(folderUrl = folderUrlBird,
 
 A dataframe is created, containing the number of cells of each land cover class that are found in the landscapeRaster, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
 
-The first step is to gather the values from the rasters and create a clean dataset. 
+The first step is to gather the values from the rasters and create a clean dataset. We then transform the data frame into a data table to calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
 
-```{r getCellValues}
+```{r getBirdDataset}
 
-birdRaster <- birdDensityRasterStack$OVEN
+namesBirdsAnalysed <- c(names(birdDensityRasterStack))
+birdDensityRasterList <- as.list(birdDensityRasterStack)
+#birdRasterLayer <- birdDensityRasterStack$OVEN
 
-landBirdRasterStack <- stack(landscapeRaster, birdRaster) # add landscape raster to birdDensityRasterStack
-cellValues <- as.data.frame(getValues(landBirdRasterStack)) # take the values from the rasters and input them to a dataframe called cellValues
-cellValues <- na.omit(cellValues) # remove any NAs
-colnames(cellValues) <- c("landCoverClass", "birdDensity") # give the columns names
-cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) # make landCoverClass categorical rather than numerical
+birdDatasets <- lapply(X = birdDensityRasterList,
+                       FUN = function(birdRasterLayer){
+
+landBirdRasterStack <- raster::stack(landscapeRaster, birdRasterLayer)
+# take the values from the rasters and input them to a data table calledcellValues
+cellValues <- data.table(getValues(landBirdRasterStack)) 
+cellValues <- setnames(cellValues, c("landCoverClass", "birdDensity"))
+# remove any rows with NA
+cellValues <- na.omit(cellValues) 
+# make landCoverClass categorical rather than numerical
+cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) 
+
+        return(cellValues)
+       })
+
+names(birdDatasets) <- namesBirdsAnalysed
 
 ```
 
-We then transform the data frame into a data table to calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
 
-```{r getCountsAndBirdMeans}
+```{r getBirdStatsbyClass}
 
-dtCellValues <- data.table(cellValues) #make cellValues into a data table
-birdsByClass <- as.data.frame(dtCellValues[order(landCoverClass) # order the rows by the land cover class
-                              ][,list(classCount = .(.N), # get the number of cells each cover class
-                                      meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
-                                      varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
-                                      seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
-                                      by = landCoverClass])
+birdStatsbyClass <- lapply(X = birdDatasets,
+                       FUN = function(singleBirdDataset){
+                         
+birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
+                                    ][,list(classCount = .(.N), # get the number of cells each cover class
+                                          meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
+                                          varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
+                                          seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
+                                          by = landCoverClass]
+
+        return(birdStats)
+            })
+
+names(birdStatsbyClass) <- namesBirdsAnalysed
 
 ```
 
-```{r plotBirdsByClass}
 
-plotBirdsByClass <- ggplot(data = birdsByClass, aes(x =landCoverClass, y = meanBirdDensity)) + geom_bar(stat="identity") +
+```{r plotbirdStatsbyClass}
+
+plotbirdStatsbyClass <- ggplot(data = birdStatsbyClass, aes(x =landCoverClass, y = meanBirdDensity)) + geom_bar(stat="identity") +
 geom_errorbar(aes(ymin=meanBirdDensity-seBirdDensity, ymax=meanBirdDensity+seBirdDensity), width=.1)
-plotBirdsByClass
+plotbirdStatsbyClass
 
 ```
 
 
 ```{r plotVarBirdDensity}
 
-plotVarBirdDensity <- ggplot(data = birdsByClass, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
+plotVarBirdDensity <- ggplot(data = birdStatsbyClass, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
 plotVarBirdDensity
 
 ```
