@@ -197,48 +197,77 @@ A dataframe is created, containing the number of cells of each land cover class 
 
 The first step is to gather the values from the rasters and create a clean dataset. We then transform the data frame into a data table to calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
 
-```{r getBirdDataset}
+```{r functionGetBirdDataset}
 
-namesBirdsAnalysed <- c(names(birdDensityRasterStack))
-birdDensityRasterList <- as.list(birdDensityRasterStack)
-#birdRasterLayer <- birdDensityRasterStack$OVEN
+getBirdDataset <- function(birdRasterStack,
+                           categoriesRaster){
+  
+  reproducible::Require("raster")
+  
+  namesBirdsLoaded <- names(birdRasterStack)
+  birdRasterList <- as.list(birdRasterStack) 
+  
+  birdDatasets <- lapply(X = birdRasterList,
+                        FUN = function(birdRasterLayer){
 
-birdDatasets <- lapply(X = birdDensityRasterList,
-                       FUN = function(birdRasterLayer){
-
-landBirdRasterStack <- raster::stack(landscapeRaster, birdRasterLayer)
-# take the values from the rasters and input them to a data table calledcellValues
-cellValues <- data.table(getValues(landBirdRasterStack)) 
-cellValues <- setnames(cellValues, c("landCoverClass", "birdDensity"))
-# remove any rows with NA
-cellValues <- na.omit(cellValues) 
-# make landCoverClass categorical rather than numerical
-cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) 
+                               landBirdRasterStack <- raster::stack(categoriesRaster, birdRasterLayer)
+                                # take the values from the rasters and input them to a data table calledcellValues
+                                cellValues <- data.table(getValues(landBirdRasterStack)) 
+                                cellValues <- setnames(cellValues, c("landCoverClass", "birdDensity"))
+                                # remove any rows with NA
+                                cellValues <- na.omit(cellValues) 
+                                # make landCoverClass categorical rather than numerical
+                                cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) 
 
         return(cellValues)
        })
+  
+  names(birdDatasets) <- namesBirdsLoaded
+  
+    return(birdDatasets)
+}
+```
 
-names(birdDatasets) <- namesBirdsAnalysed
+```{r getBirdDataset}
+
+
+birdDatasets <- getBirdDataset(birdRasterStack = birdDensityRasterStack,
+                               categoriesRaster = landscapeRaster)
+
+```
+
+```{r functionGetBirdStatsbyClass}
+
+getBirdStatsbyClass <- function(birdDatasets){
+  
+  reproducible::Require("raster")
+  
+  namesBirdsAnalysed <- names(birdDatasets) 
+  
+  birdStatsbyClass <- lapply(X = birdDatasets,
+                             FUN = function(singleBirdDataset){
+                         
+                      birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
+                                            ][,list(classCount = .(.N), # get the number of cells each cover class
+                                              meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
+                                              varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
+                                              seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
+                                             by = landCoverClass]
+
+        return(birdStats)
+            })
+
+names(birdStatsbyClass) <- namesBirdsAnalysed
+  
+    return(birdStatsbyClass)
+}
 
 ```
 
 
 ```{r getBirdStatsbyClass}
 
-birdStatsbyClass <- lapply(X = birdDatasets,
-                       FUN = function(singleBirdDataset){
-                         
-birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
-                                    ][,list(classCount = .(.N), # get the number of cells each cover class
-                                          meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
-                                          varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
-                                          seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
-                                          by = landCoverClass]
-
-        return(birdStats)
-            })
-
-names(birdStatsbyClass) <- namesBirdsAnalysed
+birdStatsByClass <- getBirdStatsbyClass(birdDatasets = birdDatasets)
 
 ```
 
