@@ -29,7 +29,12 @@ library("googledrive")
 library("data.table")
 library("plotrix") 
 library("ggplot2")
+library("ggpubr")
 library("LandR")
+library("diptest")
+library("nortest")
+library("dplyr")
+
 ```
 
 
@@ -191,11 +196,13 @@ birdDensityRasterStack <- loadBirdDensityRasters(folderUrl = folderUrlBird,
 ```
 
 
-# Create dataframe of bird density by landscape
+# Create data table of bird density by landscape
 
-A dataframe is created, containing the number of cells of each land cover class that are found in the landscapeRaster, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
+A data table is created, containing the number of cells of each land cover class that are found in the landscapeRaster, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
 
-The first step is to gather the values from the rasters and create a clean dataset. We then transform the data frame into a data table to calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
+The first step is to gather the values from the rasters and create a clean dataset. We then  calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
+
+## Get bird dataset
 
 ```{r functionGetBirdDataset}
 
@@ -236,90 +243,219 @@ birdDatasets <- getBirdDataset(birdRasterStack = birdDensityRasterStack,
 
 ```
 
-```{r functionGetBirdStatsbyClass}
 
-getBirdStatsbyClass <- function(birdDatasets){
-  
-  reproducible::Require("raster")
+## Get bird densities by cover class
+
+```{r functionGetBirdStatsByClass}
+
+getBirdStatsByClass <- function(birdDatasets){
   
   namesBirdsAnalysed <- names(birdDatasets) 
   
-  birdStatsbyClass <- lapply(X = birdDatasets,
+  birdStatsByClass <- lapply(X = birdDatasets,
                              FUN = function(singleBirdDataset){
-                         
-                      birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
-                                            ][,list(classCount = .(.N), # get the number of cells each cover class
+                               
+                               birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
+                                            ][,list(classCount = .N, # get the number of cells each cover class
                                               meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
                                               varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
-                                              seBirdDensity = std.error(birdDensity)), # get the standard error for bird density for each cover class
-                                             by = landCoverClass]
-
-        return(birdStats)
+                                              seBirdDensity = std.error(birdDensity), # get the standard error for bird density for each cover class
+                                              normality = ad.test(birdDensity)$p.value,
+                                              unimodality =   dip.test(birdDensity)$p.value),                                              
+                                             
+                                   by = landCoverClass, 
+                                   ]
+                                           
+              return(birdStats)
             })
-
-names(birdStatsbyClass) <- namesBirdsAnalysed
   
-    return(birdStatsbyClass)
+  names(birdStatsByClass) <- namesBirdsAnalysed
+  
+        return(birdStatsByClass)
+}
+
+```
+
+```{r getBirdStatsbyClass}
+
+birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
+
+```
+
+
+### Are the normality and unimodality tests passed?
+
+```{r functionGetBirdAssumptionsSummary}
+
+getBirdAssumptionsSummary <- function(birdStatsTables){
+  
+  namesBirdsAnalysed <- names(birdStatsTables) 
+  
+  birdAssumptionsSummary <- lapply(X = birdStatsTables,
+                             FUN = function(singleBirdStats){
+          
+           landCoverClass <- dplyr::pull(singleBirdStats, landCoverClass) 
+                               
+                normality <- dplyr::pull(singleBirdStats, normality)
+            normalityTrue <- ifelse(normality <= 0.05,"yes","no")
+          
+              unimodality <- dplyr::pull(singleBirdStats, unimodality)
+          unimodalityTrue <- ifelse(unimodality <= 0.05,"yes","no")
+                           
+        singleBirdAssumptionsSummary <- data.table(landCoverClass, normalityTrue, unimodalityTrue)
+                                           
+              return(singleBirdAssumptionsSummary)
+            })
+  
+  names(birdAssumptionsSummary) <- namesBirdsAnalysed
+  
+        return(birdAssumptionsSummary)
 }
 
 ```
 
 
-```{r getBirdStatsbyClass}
+```{r getBirdAssumptionsSummary}
 
-birdStatsByClass <- getBirdStatsbyClass(birdDatasets = birdDatasets)
+birdAssumptionsSummary <- getBirdAssumptionsSummary(birdStatsTables = birdStatsByClass)
 
 ```
 
+
+### Plot mean bird density by land cover class with SE bars
 
 ```{r plotbirdStatsbyClass}
 
-plotbirdStatsbyClass <- ggplot(data = birdStatsbyClass, aes(x =landCoverClass, y = meanBirdDensity)) + geom_bar(stat="identity") +
-geom_errorbar(aes(ymin=meanBirdDensity-seBirdDensity, ymax=meanBirdDensity+seBirdDensity), width=.1)
-plotbirdStatsbyClass
+
+plotsBirdStatsByClass <- lapply(X = birdStatsByClass,
+                             FUN = function(singleBirdStats){
+                            
+    plotBirdStatsByClass <- ggplot(data = singleBirdStats, aes(x =landCoverClass, y = meanBirdDensity)) +   geom_bar(stat="identity", width=0.7, fill="steelblue") + theme_classic() + ggtitle("Mean Bird Density by Cover Class, with SE Bars") + theme(axis.text=element_text(size=7)) +
+geom_errorbar(aes(ymin=meanBirdDensity-seBirdDensity, ymax=meanBirdDensity+seBirdDensity), width=.2) 
+ 
+return(plotBirdStatsByClass)
+ 
+                             })
 
 ```
 
+#Examine the data using a kernel density plot
+
+### Get Kernel Density Data and Store in Lists
+
+```{r getKernelDensityDataFunction}
+
+getKernelDensityData <- function(birdDatasets){
+  
+  namesBirdsAnalysed <- names(birdDatasets) 
+  
+  birdKernelDensities <- lapply(X = birdDatasets,
+                             FUN = function(singleBirdDataset){
+                           
+      namesClasses <- levels(singleBirdDataset$landCoverClass) 
+     
+      classKernelDensities <- lapply(X = namesClasses,
+                              FUN = function(coverType){
+          
+            dataForDensity <- singleBirdDataset[landCoverClass == coverType]
+            singleClassDensity <- density(dataForDensity[,birdDensity])
+
+            return(singleClassDensity)
+                              })
+            
+      names(classKernelDensities) <- namesClasses      
+      return(classKernelDensities)
+                    })
+
+  names(birdKernelDensities) <- namesBirdsAnalysed
+  return(birdKernelDensities)
+}
+
+```
+
+```{r getKernelDensityData}
+
+kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
+
+```
+
+
+## Plot a Particular Kernel Density Data
+
+```{r getKernelDensityPlotFunction}
+
+getKernelDensityPlot <- function(birdCoverDensity,
+                                 birdName,
+                                 coverType,
+                                 meanData){
+densityPlot <- plot(birdCoverDensity,
+     main = paste0("Kernel Density Plot for ", paste0(birdName), " in Cover Class ", coverType),
+     xlab = "Predicted Bird Density",
+     ylab = "Density of predictions") +     
+  abline(v = meanData, col = "red") 
+
+    return(densityPlot)
+                        }
+
+```
+
+```{r getKernelDensityPlot}
+
+kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
+                                          coverType = "2", #cover type name for title
+                                          birdCoverDensity = kernelDensityData$OVEN$"2", #which kernel density cover type and bird species to plot
+                                          meanData = birdStatsByClass$OVEN[2,meanBirdDensity] #show a red line with the mean density
+                                          )
+#which sp and cover type to graph 
+
+```
 
 ```{r plotVarBirdDensity}
-
-plotVarBirdDensity <- ggplot(data = birdStatsbyClass, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
-plotVarBirdDensity
+# 
+# plotsVarBirdDensity <- lapply(X = birdStatsByClass,
+#                               FUN = function(singleBirdStats){
+#                                 
+# plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
+# 
+# return(plotVarBirdDensity)
+# 
+#                              })
 
 ```
+
 
 # Input kNN Age Raster
 
 ```{r getBirdDensityRaster}
 
-nameAgeRaster <- "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" #specify file name
-folderUrlAge <- "https://drive.google.com/file/d/1dBnNNUJ-esognueDN5zPsrQo3Plpi9on/view?usp=sharing" #give file location 
-archiveAge <- "kNN_rasters.zip" #archive name
-downloadFolderAge <- paste0(getwd(),"/ageRasterFiles") #say where to download to
-
-ageRaster <- prepInputs(targetFile = nameAgeRaster, 
-                            url = folderUrlAge, 
-                            archive = archiveAge, 
-                            alsoExtract = "similar",
-                            destinationPath = downloadFolderAge,
-                            fun = "raster::raster", # the function raster is used to input the file
-                            rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
-                            studyArea = studyArea, #give the studyArea for the raster to be masked to
-                            overwrite = TRUE)
-
-plot(ageRaster) #visually check ageRaster
+# nameAgeRaster <- "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" #specify file name
+# folderUrlAge <- "https://drive.google.com/file/d/1dBnNNUJ-esognueDN5zPsrQo3Plpi9on/view?usp=sharing" #give file location 
+# archiveAge <- "kNN_rasters.zip" #archive name
+# downloadFolderAge <- paste0(getwd(),"/ageRasterFiles") #say where to download to
+# 
+# ageRaster <- prepInputs(targetFile = nameAgeRaster, 
+#                             url = folderUrlAge, 
+#                             archive = archiveAge, 
+#                             alsoExtract = "similar",
+#                             destinationPath = downloadFolderAge,
+#                             fun = "raster::raster", # the function raster is used to input the file
+#                             rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
+#                             studyArea = studyArea, #give the studyArea for the raster to be masked to
+#                             overwrite = TRUE)
+# 
+# plot(ageRaster) #visually check ageRaster
 
 ```
 
 # Get values of age raster
 
 ```{r getAgeRasterValues}
-
-
-ageRasterStack <- stack(landscapeRaster, birdRaster, ageRaster) # stack the three rasters
-ageValues <- as.data.frame(getValues(ageRaster, landscapeRaster,)) # take the values from the two rasters and input them to a dataframe called cellValues
-#colnames(ageStackValues) <- c("landCoverClass", "birdDensity", "age") # give the columns names 
-ageValues <- na.omit(ageValues) # remove any NAs
-#ageStackValues$LCC2005_V1_4a <- as.factor(ageStackValues$LCC2005_V1_4a) # make landCoverClass categorical rather than numerical
-tmp <- as.data.frame(ageRasterStack)                          
+# 
+# 
+# ageRasterStack <- stack(landscapeRaster, birdRaster, ageRaster) # stack the three rasters
+# ageValues <- as.data.frame(getValues(ageRaster, landscapeRaster,)) # take the values from the two rasters and input them to a dataframe called cellValues
+# #colnames(ageStackValues) <- c("landCoverClass", "birdDensity", "age") # give the columns names 
+# ageValues <- na.omit(ageValues) # remove any NAs
+# #ageStackValues$LCC2005_V1_4a <- as.factor(ageStackValues$LCC2005_V1_4a) # make landCoverClass categorical rather than numerical
+# tmp <- as.data.frame(ageRasterStack)                          
 ```
