@@ -257,7 +257,8 @@ getBirdStatsByClass <- function(birdDatasets){
                                
                                birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
                                             ][,list(classCount = .N, # get the number of cells each cover class
-                                              meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
+                                              #meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
+                                              meanBirdDensity = log(mean(birdDensity)), #try log of mean bird density
                                               varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
                                               seBirdDensity = std.error(birdDensity), # get the standard error for bird density for each cover class
                                               normality = ad.test(birdDensity)$p.value,
@@ -285,41 +286,58 @@ birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
 
 ### Are the normality and unimodality tests passed?
 
-```{r functionGetBirdAssumptionsSummary}
+```{r functionGetAssumptionsSummary}
 
-getBirdAssumptionsSummary <- function(birdStatsTables){
-  
+getAssumptionsSummary <- function(birdStatsTables){
+
   namesBirdsAnalysed <- names(birdStatsTables) 
   
-  birdAssumptionsSummary <- lapply(X = birdStatsTables,
-                             FUN = function(singleBirdStats){
-          
-           landCoverClass <- dplyr::pull(singleBirdStats, landCoverClass) 
+   byBirdAssumptions <- lapply(birdStatsTables,
+                             FUN = function(x){
+        
+      #Normality Proportion                         
+      noNormal <- sum(!(x$normality < 0.05))
+      totalClassesNorm <- length(!(x$normality < 0.05)) 
+      propNormal <- noNormal/totalClassesNorm
+      
+      #unimodal proportion                        
+      noUnimodal <- sum(!(x$unimodality < 0.05))
+      totalClassesUni <- length(!(x$unimodality < 0.05))
+      propUnimodal <- noUnimodal/totalClassesUni
+
+       assumptions <- data.table(propNormal, propUnimodal)        
+            return(assumptions) 
+       
+                             })
+   
+                    names(byBirdAssumptions) <- namesBirdsAnalysed
+  
+               numberOfSpecies <- length(byBirdAssumptions) 
+               
+               birdAssumpTab <- rbindlist(byBirdAssumptions, use.names = TRUE, idcol = "birdSp")
+               
+               #proportion of species where > 50% cover types are normal
+               numberSpNormal <- sum(!(birdAssumpTab$propNormal < 0.5))
+               propSpNormal <- numberSpNormal/numberOfSpecies
+              
+               #proportion of species where > 50% cover types are normal  
+               numberSpUnimodal <- sum(!(birdAssumpTab$propUnimodal < 0.5))
+               propSpUnimodal <- numberSpUnimodal/numberOfSpecies
+               
+               birdAssumptions <- data.table(propSpNormal, propSpUnimodal)
                                
-                normality <- dplyr::pull(singleBirdStats, normality)
-            normalityTrue <- ifelse(normality <= 0.05,"yes","no")
-          
-              unimodality <- dplyr::pull(singleBirdStats, unimodality)
-          unimodalityTrue <- ifelse(unimodality <= 0.05,"yes","no")
-                           
-        singleBirdAssumptionsSummary <- data.table(landCoverClass, normalityTrue, unimodalityTrue)
-                                           
-              return(singleBirdAssumptionsSummary)
-            })
+                return(birdAssumptions)
+                    
+                               }
   
-  names(birdAssumptionsSummary) <- namesBirdsAnalysed
-  
-        return(birdAssumptionsSummary)
-}
+```
+
+```{r getAssumptionsSummary}
+
+assumptionsSummary <- getAssumptionsSummary(birdStatsTables= birdStatsByClass)
 
 ```
 
-
-```{r getBirdAssumptionsSummary}
-
-birdAssumptionsSummary <- getBirdAssumptionsSummary(birdStatsTables = birdStatsByClass)
-
-```
 
 
 ### Plot mean bird density by land cover class with SE bars
