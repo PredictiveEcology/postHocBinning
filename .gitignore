@@ -1,9 +1,3 @@
-# Ignore everything
-*
-
-# But not these files...
-.gitignore
-postHocBinning.Rproj
-postHocBinning.Rmd
-.Rproj.user
-README.md
+.Rproj.user/
+inputs/
+outputs/
