@@ -35,6 +35,7 @@ Require("ggpubr")
 Require("diptest")
 Require("nortest")
 Require("dplyr")
+Require("tidyverse")
 
 inputsDir <- checkPath("inputs", create = TRUE)
 outputsDir <- checkPath("outputs", create = TRUE)
@@ -82,148 +83,55 @@ plot(landscapeRaster) #visually check landscapeRaster
 
 # Get Bird Density Data
 
-## input single bird raster
-
-```{r getBirdDensityRaster}
-# A single raster of predicted bird densities is downloaded and loaded via prepInputs, as with the studyArea.
-
-# nameBirdRaster <- "mosaic-OVEN-run3.tif" #specify file name
-# folderUrlBird <- "https://drive.google.com/file/d/1xGhYgy71-8gjjMkgBg6F2kyp4hI3Y4rl/view?usp=sharing" #give file location 
-# archiveBird <- "birdDensityRasters.zip" #archive name
-# downloadFolderBird <- paste0(getwd(),"/birdRasterFiles") #say where to download to
-# 
-# birdRaster <- prepInputs(targetFile = nameBirdRaster, 
-#                             url = folderUrlBird, 
-#                             archive = archiveBird, 
-#                             alsoExtract = "similar",
-#                             destinationPath = downloadFolderBird,
-#                             fun = "raster::raster", # the function raster is used to input the file
-#                             rasterToMatch = landscapeRaster, # give the landscapRaster to be reprojected and cropped to
-#                             studyArea = studyArea, #give the studyArea for the raster to be masked to
-#                             overwrite = TRUE)
-# 
-# plot(birdRaster) #visually check birdRaster
-```
-
-## Get multiple bird rasters - 1km bootstrapped rasters
+## Download/load 250m bootstrapped bird rasters for mean and variance, and the DF giving numbers of bootstrap replicates the rasters were derived from.
 
 Multiple rasters of predicted bird density are downloaded, postProcessed, loaded and output as a raster stack.
+
 To do this we first define a function to download rasters for the chosen bird species, and output a list of the rasters that have been downloaded. 
 
-```{r functionDownload1kmBootRasters}
-# #load/download necessary packages
-#   reproducible::Require("googledrive")
-#   reproducible::Require("raster")
-#   
-# download1kmBootRasters <- function(folderUrl, 
-#                                        birdsList, 
-#                                        rastersPath){
-# #drive_ls function is used to list all the files it finds using the folder url with the given pattern
-#    filesToDownload <- googledrive::drive_ls( path = as_id(folderUrl), pattern = "pred-") #note: has to be changed if filenaming system changes
-#  #grepl function searches for all items in the filesToDownload that are on birdList & stores their names in rastersforBirdList 
-#   rastersForBirdList <- filesToDownload$name[grepl(pattern = paste(birdsList, collapse = "|"), x = filesToDownload$name)]
-#   
-# #for each item in turn from rastersForBirdlist the following function is applied: 
-#   downloadedRasters <- lapply(X = rastersForBirdList, FUN = function(rasterFile){
-# #if the item in rastersForBirdList is not already present at rastersPath, googledrive package downloads it    
-#         if (!file.exists(file.path(rastersPath, rasterFile))){
-#       googledrive::drive_download(file = as_id(filesToDownload[filesToDownload$name %in% rasterFile, ]$id), #rasterFile,
-#                                   path = file.path(rastersPath, rasterFile), overwrite = TRUE)
-#     }
-# #otherwise, if it is already present and downloaded, just get the name of the item
-#     return(raster(file.path(rastersPath, rasterFile), verbose = TRUE))
-#   })
-# 
-# #get the species codes as names for the downloadedRasters object, rather than using the whole filepath
-#    X <- lapply(rastersForBirdList, substr, 6, 9) #works for strings of the form pred-XXXX-CAN-Mean
-#    names(downloadedRasters) <- X
-# #the downloadBirdDensityRasters function returns/loads the downloaded rasters
-#  return(downloadedRasters)
-# }
-
+```{r functionDownload250mBootRasters}
+download250mBootRasters <-
+  function(folderUrl, birdsList, rastersPath) {
+    ## drive_ls function is used to list all the files it finds using the folder url with the given pattern
+    filesToDownload <-
+      googledrive::drive_ls(path = as_id(folderUrl)) #note: has to be changed if filenaming system changes
+    ## grepl function searches for all items in the filesToDownload that are on birdList & stores their names in rastersforBirdList
+    rastersForBirdList <-
+      filesToDownload$name[grepl(pattern = paste(birdsList, collapse = "|"),
+                                 x = filesToDownload$name)]
+    
+    ## for each item in turn from rastersForBirdlist the following function is applied:
+    downloadedRasters <-
+      lapply(
+        X = rastersForBirdList,
+        FUN = function(rasterFile) {
+          ## if the item in rastersForBirdList is not already present at rastersPath, googledrive package downloads it
+          if (!file.exists(file.path(rastersPath, rasterFile))) {
+            googledrive::drive_download(
+              file = as_id(filesToDownload[filesToDownload$name %in% rasterFile,]$id),
+              #rasterFile,
+              path = file.path(rastersPath, rasterFile),
+              overwrite = TRUE
+            )
+          }
+          
+          ## otherwise, if it is already present and downloaded, just get the name of the item
+          return(raster(file.path(rastersPath, rasterFile), verbose = TRUE))
+        }
+      )
+    
+    #get the species codes as names for the downloadedRasters object, rather than using the whole filepath
+    X <-
+      lapply(rastersForBirdList, substr, 1, 8) #works for strings of the form "varsXXXX" or "meanXXXX"
+    names(downloadedRasters) <- X
+    #the downloadBirdDensityRasters function returns/loads the downloaded rasters
+    return(downloadedRasters)
+  }
 ```
+
 
 The download bird function is called by a second defined function, which postprocesses (reprojected, cropped and masked according to the given rasterToMatch and studyArea) and loads the rasters in a raster stack.   
 
-```{r functionLoad1kmBootRasters}
-# 
-# load1kmBootRasters <- function(birdsList,
-#                                    folderUrl,
-#                                    rastersPath,
-#                                    rasterToMatch,
-#                                    studyArea){
-#   reproducible::Require("raster")
-# #check that there is a folder at the given rastersPath. if not, create it. 
-#   rastersPath <- checkPath(file.path(rastersPath), create = TRUE) 
-# #download the rasters on the birdList. Return List of downloaded files.
-#   downloadedRasters <- download1kmBootRasters(folderUrl = folderUrl,  
-#                                                   birdsList = birdsList, 
-#                                                   rastersPath = rastersPath)
-#   
-# #lapply applys the custom function to each raster in turn
-#   postprocessedRasters <- lapply(X = downloadedRasters, FUN = function(RasterLayer){
-# #the function postProcesses the layer, cropping and masking it to a given study area and rasterToMatch, and saving it to a given destination path
-#     proRaster <- postProcess(RasterLayer, 
-#                              studyArea = studyArea, 
-#                              rasterToMatch = rasterToMatch, 
-#                              destinationPath = rastersPath)
-# #each layer is returned into the object proRaster
-#     return(proRaster)
-#   })
-#   
-# #birdDensityRasterStack are made into a raster stack
-#   birdDensityRasterStack <- raster::stack(postprocessedRasters)
-# #Finally the whole function returns the birdDensityRasterStack
-#     return(birdDensityRasterStack)
-# }
-#   
-
-```
-
-Here, we define which bird species we want, where to download the bird density rasters from, and where to save them. It then calls the `loadBirdDensityRaster` function. 
-
-```{r callBirdRasterLoadFunction}
-## TODO: keep lines <80 chars or they won't appear correctly in the rendered document
-# 
-# birdsList <- c("CAWA","OVEN") #, "ALFL", "AMCR", "AMGO", "AMPI", "AMRE", "AMRO", "ATSP", "ATTW", "BANS", "BAOR", "BARS", "BAWW", "BBMA", "BBWA", "BBWO", "BCCH", "BEKI", "BGGN", "BHCO", "BHVI", "BLBW", "BLJA", "BLPW", "BOBO", "BOCH", "BOWA", "BRBL", "BRCR", "BRTH", "BTBW", "BTNW", "BWWA",  "CCSP", "CEDW", "CHSP", "CLSW", "CMWA", "COGR", "CONW", "CORA", "COYE", "CSWA", "DEJU", "DOWO", "DUFL", "DUNL", "EABL", "EAKI", "EAPH", "EATO", "EAWP", "EUST", "EVGR", "FISP", "FOSP", "GCFL", "GCKI", "GCSP", "GCTH", "GRAJ", "GRCA", "GRSP", "GRYE", "GWWA", "HAFL", "HAWO", "HETH", "HOLA", "HOSP", "HOWR", "INBU", "KILL", "LALO", "LCSP", "LEFL", "LEYE", "LISP", "MAWA", "MOBL", "MODO", "MOWA", "NAWA", "NESP", "NOCA", "NOFL", "NOPA", "NOWA", "OCWA", "OSFL", "PAWA", "PHVI", "PIGR", "PISI", "PIWA", "PIWO", "PUFI", "RBGR", "RBNU", "RBWO", "RCKI", "RECR", "REVI", "RHWO", "ROPI", "RTHU", "RUBL", "RUGR", "RWBL", "SAVS", "SCTA", "SEWR", "SOGR", "SOSA", "SOSP", "SPGR", "SPSA", "SWSP", "SWTH", "TEWA", "TOSO", "TOWA", "TRES", "UPSA", "VATH", "VEER", "VESP", "WAVI", "WBNU", "WCSP", "WETA", "WEWP", "WIPT", "WISN", "WITU", "WIWA", "WIWR", "WOTH", "WTSP", "WWCR", "YBCU", "YBFL", "YBSA", "YEWA", "YHBL", "YRWA") #specify the bird species 
-# downloadFolderBird <- paste0(getwd(),"/birdRasterFiles") #say where to download to
-# folderUrlBird <- "https://drive.google.com/drive/folders/1exWa6vfhGo1DNUL4ei2baDz77as7jYzY?usp=sharing" # give file location 
-# 
-# birdDensityRasterStack <- load1kmBootRasters(folderUrl = folderUrlBird,
-#                                                  birdsList = birdsList,
-#                                                  rastersPath = downloadFolderBird,
-#                                                  rasterToMatch = landscapeRaster,
-#                                                  studyArea = studyArea)
-```
-
-## Download/load 250m bootstrapped bird rasters for mean and variance, and the DF giving numbers of bootstrap replicates the rasters were derived from.
-
-```{r functionDownload250mBootRasters}
-download250mBootRasters <- function(folderUrl, birdsList, rastersPath) {
-  ## drive_ls function is used to list all the files it finds using the folder url with the given pattern
-  filesToDownload <- googledrive::drive_ls( path = as_id(folderUrl)) #note: has to be changed if filenaming system changes
-  ## grepl function searches for all items in the filesToDownload that are on birdList & stores their names in rastersforBirdList
-  rastersForBirdList <- filesToDownload$name[grepl(pattern = paste(birdsList, collapse = "|"), x = filesToDownload$name)]
-  
-  ## for each item in turn from rastersForBirdlist the following function is applied:
-  downloadedRasters <- lapply(X = rastersForBirdList, FUN = function(rasterFile) {
-    ## if the item in rastersForBirdList is not already present at rastersPath, googledrive package downloads it
-    if (!file.exists(file.path(rastersPath, rasterFile))) {
-      googledrive::drive_download(file = as_id(filesToDownload[filesToDownload$name %in% rasterFile, ]$id), #rasterFile,
-                                  path = file.path(rastersPath, rasterFile), overwrite = TRUE)
-    }
-    
-    ## otherwise, if it is already present and downloaded, just get the name of the item
-    return(raster(file.path(rastersPath, rasterFile), verbose = TRUE))
-  })
-
-  #get the species codes as names for the downloadedRasters object, rather than using the whole filepath
-  X <- lapply(rastersForBirdList, substr, 1, 8) #works for strings of the form "varsXXXX" or "meanXXXX"
-  names(downloadedRasters) <- X
-  #the downloadBirdDensityRasters function returns/loads the downloaded rasters
-  return(downloadedRasters)
-}
-```
 
 ```{r functionLoad250mBootRasters}
 load250mBootRasters <- function(birdsList,
@@ -255,11 +163,14 @@ load250mBootRasters <- function(birdsList,
 }
 ```
 
+Here, we define which bird species we want, where to download the bird density rasters from, and where to save them. It then calls the `loadBirdDensityRaster` function. 
+
 ```{r callLoad250mBootFunction}
-birdsList <- c("BAWW", "OVEN") #specify the bird species
+#Specify which bird species to examine/input
+birdsList <- c("BAWW", "OVEN") #, "CAWA", "ALFL", "AMCR", "AMGO", "AMPI", "AMRE", "AMRO", "ATSP", "ATTW", "BANS", "BAOR", "BARS", "BBMA", "BBWA", "BBWO", "BCCH", "BEKI", "BGGN", "BHCO", "BHVI", "BLBW", "BLJA", "BLPW", "BOBO", "BOCH", "BOWA", "BRBL", "BRCR", "BRTH", "BTBW", "BTNW", "BWWA",  "CCSP", "CEDW", "CHSP", "CLSW", "CMWA", "COGR", "CONW", "CORA", "COYE", "CSWA", "DEJU", "DOWO", "DUFL", "DUNL", "EABL", "EAKI", "EAPH", "EATO", "EAWP", "EUST", "EVGR", "FISP", "FOSP", "GCFL", "GCKI", "GCSP", "GCTH", "GRAJ", "GRCA", "GRSP", "GRYE", "GWWA", "HAFL", "HAWO", "HETH", "HOLA", "HOSP", "HOWR", "INBU", "KILL", "LALO", "LCSP", "LEFL", "LEYE", "LISP", "MAWA", "MOBL", "MODO", "MOWA", "NAWA", "NESP", "NOCA", "NOFL", "NOPA", "NOWA", "OCWA", "OSFL", "PAWA", "PHVI", "PIGR", "PISI", "PIWA", "PIWO", "PUFI", "RBGR", "RBNU", "RBWO", "RCKI", "RECR", "REVI", "RHWO", "ROPI", "RTHU", "RUBL", "RUGR", "RWBL", "SAVS", "SCTA", "SEWR", "SOGR", "SOSA", "SOSP", "SPGR", "SPSA", "SWSP", "SWTH", "TEWA", "TOSO", "TOWA", "TRES", "UPSA", "VATH", "VEER", "VESP", "WAVI", "WBNU", "WCSP", "WETA", "WEWP", "WIPT", "WISN", "WITU", "WIWA", "WIWR", "WOTH", "WTSP", "WWCR", "YBCU", "YBFL", "YBSA", "YEWA", "YHBL", "YRWA")
 folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
 
-birdDensityRasterStack <- load250mBootRasters(folderUrl = folderUrlBird,
+birdRasterStack <- load250mBootRasters(folderUrl = folderUrlBird,
                                               birdsList = birdsList,
                                               rastersPath = downloadFolderBird,
                                               rasterToMatch = landscapeRaster,
@@ -284,13 +195,16 @@ We then  calculate, for each cover class, the number of cells in this class, the
 Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`.
 
 ```{r functionGetBirdDataset}
+
 getBirdDataset <- function(birdRasterStack, categoriesRaster) {
   reproducible::Require("raster")
   
-  namesBirdsLoaded <- names(birdRasterStack)
-  birdRasterList <- as.list(birdRasterStack) 
+  meanBirdRasters <- names(birdRasterStack) %>% 
+                          str_detect('mean') %>%
+                          keep(birdRasterStack, .)
+  namesMeanBirdRasters <- names(meanBirdRasters)
   
-  birdDatasets <- lapply(X = birdRasterList, FUN = function(birdRasterLayer) {
+  birdDatasets <- lapply(X = meanBirdRasters, FUN = function(birdRasterLayer) {
     landBirdRasterStack <- raster::stack(categoriesRaster, birdRasterLayer)
     ## take the values from the rasters and input them to a data table calledcellValues
     cellValues <- data.table(getValues(landBirdRasterStack))
@@ -304,14 +218,14 @@ getBirdDataset <- function(birdRasterStack, categoriesRaster) {
     return(cellValues)
   })
   
-  names(birdDatasets) <- namesBirdsLoaded
+  names(birdDatasets) <- namesMeanBirdRasters
 
   return(birdDatasets)
 }
 ```
 
 ```{r getBirdDataset}
-birdDatasets <- getBirdDataset(birdRasterStack = birdDensityRasterStack,
+birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
                                categoriesRaster = landscapeRaster)
 
 for (i in names(birdDatasets)) {
@@ -485,3 +399,14 @@ kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for ti
 # 
 # })
 ```
+
+# 2D problem - Including Age Class
+
+```{r getAgeRaster}
+
+#create example age raster
+
+
+```
+
+
