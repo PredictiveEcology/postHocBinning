@@ -1,3 +1,7 @@
-.Rproj.user/
-inputs/
-outputs/
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# simulation data folders
+outputs
