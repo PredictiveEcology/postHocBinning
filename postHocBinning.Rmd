@@ -34,8 +34,9 @@ Require("ggplot2")
 Require("ggpubr")
 Require("diptest")
 Require("nortest")
+Require("gbm")
 Require("dplyr")
-Require("tidyverse") ### maybe not needed now
+Require("tidyverse")
 
 inputsDir <- checkPath("inputs", create = TRUE)
 outputsDir <- checkPath("outputs", create = TRUE)
@@ -80,10 +81,208 @@ studyArea <- prepInputs(targetFile = nameAreaShapefile,
 rasterToMatch <- raster::crop(rasterToMatch, studyArea) #create landscapeRaster by cropping rasterToMatch to studyArea
 rasterToMatch <- raster::mask(rasterToMatch, studyArea) #mask landscapeRaster to studyArea
 #landscapeRasters <- unstack(landscapeRastersStack)
+
 ```
 
 
+# Get Landscape Data
 
+Here we download and load the rasters giving data on the landscape. 
+
+First we download a raster that gives the forest cover types, in forested areas.
+
+```{r getForClassRaster}
+
+nameForClassRaster <- "VegTypeABBC.tif" #specify file name
+folderUrlForClass <- "https://drive.google.com/file/d/1cfrb-RhiwMD4XlS_yzRSQYPVh8ffwC0L/view?usp=sharing"
+archiveForClass <- "vegTypeABBC.zip" #give archive name
+
+forClassRaster <- prepInputs(targetFile = nameForClassRaster, 
+                        url = folderUrlForClass,
+                        archive = archiveForClass, 
+                        alsoExtract = "similar", #Extract other files with similar names
+                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
+                        fun = "raster::raster", #use the function raster
+                        #targetCRS = crs(rasterToMatch),
+                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        studyArea = studyArea,
+                        useCache = getOption("reproducible.useCache", FALSE),
+                        overwrite = TRUE,
+                        verbose = TRUE)
+
+names(forClassRaster) <- c("forClassRaster")
+
+forClassRaster[forClassRaster == 0] <- NA
+
+# #rename the categories found in the rasters
+# namesValues <- as.factor(unique(forClassRaster))
+# newVals <- unlist(lapply(X = namesValues, FUN = function(x) {
+# newVal <-  as.factor(paste0("FR", x))
+#     return(newVal)
+#   }))
+# reclassVector <- c(rbind(namesValues, newVals))
+# reclassMatrix <- matrix(reclassVector,
+#                               ncol=2, byrow = TRUE)
+# forClassRaster <- reclassify(forClassRaster,
+#                      reclassMatrix)
+
+plot(forClassRaster) #visually check forClassRaster
+
+```
+
+Then we input a raster that gives cover types in non forested areas
+
+```{r getNonForRaster}
+
+nameNonForRaster <- "LCC2005_V1_4a.tif" #specify file name
+folderUrlNonFor <- "https://drive.google.com/file/d/1E3iQRfaSPx0-b2GTgbLZqjo2Nhom39EK/view?usp=sharing"
+archiveNonFor <- "LCC2005_V1_4a.zip" #give archive name
+
+nonForRaster <- prepInputs(targetFile = nameNonForRaster, 
+                        url = folderUrlNonFor,
+                        archive = archiveNonFor, 
+                        alsoExtract = "similar", #Extract other files with similar names
+                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
+                        fun = "raster::raster", #use the function raster
+                        #targetCRS = crs(rasterToMatch),
+                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        studyArea = studyArea,
+                        useCache = getOption("reproducible.useCache", FALSE),
+                        overwrite = TRUE,
+                        verbose = TRUE)
+
+names(nonForRaster) <- c("nonForRaster")
+
+nonForRaster <- overlay(x = nonForRaster, y = forClassRaster, fun = function(x, y) {
+                         x[!is.na(y[])] <- NA
+                          return(x)
+                            })
+
+#rename the categories found in the rasters
+# namesValues <- unique(nonForRaster)
+# newVals <- unlist(lapply(X = namesValues, FUN = function(x) {
+# newVal <-  as.factor(paste0("NF", x))    
+#     return(newVal)
+#   }))
+# reclassVector <- c(rbind(namesValues, newVals))
+# reclassMatrix <- matrix(reclassVector, 
+#                               ncol=2, byrow = TRUE)
+# nonForRaster <- reclassify(nonForRaster,
+#                      reclassMatrix)
+
+plot(nonForRaster) #visually check nonForRaster
+
+```
+
+We then combine the nonForRaster and the forClassRaster so that we have a single raster giving the cover types (both forested and non-forested) over the study region. 
+
+```{r createLandscapeRaster}
+
+landscapeRaster <- cover(x = forClassRaster,
+                         y = nonForRaster,
+                         filename = "landscapeRaster",
+                         overwrite = TRUE )
+
+names(landscapeRaster) <- c("landscapeRaster")
+
+plot(landscapeRaster) #visually check nonForRaster
+
+```
+
+```{r createFNFRaster}
+
+#create a raster that gives if an area is forest or not (0 for non-forest, 1 for forest)
+#This will allow me to have a value in the birdDataset that says if a cell was forested or not
+
+#make forest 1
+valsFR <- unique(forClassRaster)
+newValFR <-  as.factor(rep("1", length(valsFR)))
+newValsFR <- cbind(valsFR, newValFR)
+reclassMatrixFR <- matrix(newValsFR, 
+                              ncol=2, byrow = FALSE)
+rasterFR <- reclassify(forClassRaster,
+                     reclassMatrixFR)
+
+#make the rest 0 
+replaceNA <- function(x, na.rm, ...){ 
+  if(is.na(x[1]))
+    return(0)
+  else
+    return(x)
+} 
+
+FNFRaster <- calc(rasterFR, fun = replaceNA)
+#mask back down to size again
+FNFRaster <- raster::mask(FNFRaster,rasterToMatch)
+
+names(FNFRaster) <- c("FNFRaster")
+
+plot(FNFRaster) #visually check FNFRaster
+
+```
+
+Finally, we input a raster that gives the ages of the forested areas in age classes. 
+
+```{r getForAgeRaster}
+
+nameForAgeRaster <- "ageRas.tif" #specify file name
+folderUrlAge <- "https://drive.google.com/file/d/1Ih4YLfIYX6nQcotdd41j4yRtZKRQxYo7/view?usp=sharing"
+archiveAge <- "ageRaster.zip" #give archive name
+
+forAgeRaster <- prepInputs(targetFile = nameForAgeRaster, 
+                        url = folderUrlAge,
+                        archive = archiveAge, 
+                        alsoExtract = "similar", #Extract other files with similar names
+                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
+                        fun = "raster::raster", #use the function raster
+                        #targetCRS = crs(rasterToMatch),
+                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        studyArea = studyArea,
+                        overwrite = TRUE,
+                        verbose = TRUE)
+
+names(forAgeRaster) <- c("forAgeRaster")
+
+plot(forAgeRaster) #visually check ageRaster
+```
+
+##Get KNN age raster to fill in non forested ages
+
+```{r getkNNAgeRaster}
+
+namekNNAgeRaster <- "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" #specify file name
+folderUrlkNNAge <- "https://drive.google.com/file/d/1Ih4YLfIYX6nQcotdd41j4yRtZKRQxYo7/view?usp=sharing"
+archivekNNAge <- "ageRaster.zip" #give archive name
+
+kNNAgeRaster <- prepInputs(targetFile = namekNNAgeRaster, 
+                        url = folderUrlkNNAge,
+                        archive = archivekNNAge, 
+                        alsoExtract = "similar", #Extract other files with similar names
+                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
+                        fun = "raster::raster", #use the function raster
+                        #targetCRS = crs(rasterToMatch),
+                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        studyArea = studyArea,
+                        overwrite = TRUE,
+                        verbose = TRUE)
+
+names(kNNAgeRaster) <- c("kNNAgeRaster")
+
+plot(kNNAgeRaster) #visually check kNNAgeRaster
+```
+
+```{r createAgeRaster}
+
+ageRaster <- cover(x = forAgeRaster,
+                         y = kNNAgeRaster,
+                         filename = "ageRaster",
+                         overwrite = TRUE )
+
+names(ageRaster) <- c("ageRaster")
+
+plot(ageRaster) #visually check nonForRaster
+
+```
 
 # Get Bird Density Data
 
@@ -190,137 +389,6 @@ noBootsDF <- drive_download(file = noBootsDFLocation,
 ```
 
 
-# Get Landscape Data
-
-Here we download and load the rasters giving data on the landscape. 
-
-First we download a raster that gives the forest cover types, in forested areas.
-
-```{r getCoverClassRaster}
-
-nameCoverClassRaster <- "VegTypeABBC.tif" #specify file name
-folderUrlCoverClass <- "https://drive.google.com/file/d/1cfrb-RhiwMD4XlS_yzRSQYPVh8ffwC0L/view?usp=sharing"
-archiveCoverClass <- "vegTypeABBC.zip" #give archive name
-
-coverClassRaster <- prepInputs(targetFile = nameCoverClassRaster, 
-                        url = folderUrlCoverClass,
-                        archive = archiveCoverClass, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
-                        #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
-                        studyArea = studyArea,
-                        useCache = getOption("reproducible.useCache", FALSE),
-                        overwrite = TRUE,
-                        verbose = TRUE)
-
-names(coverClassRaster) <- c("coverClassRaster")
-
-coverClassRaster[coverClassRaster == 0] <- NA
-
-#rename the categories found in the rasters
-# namesValues <- unique(coverClassRaster)
-# newVals <- unlist(lapply(X = namesValues, FUN = function(x) {
-# newVal <-  as.factor(paste0("FR", x))    
-#     return(newVal)
-#   }))
-# reclassVector <- c(rbind(namesValues, newVals))
-# reclassMatrix <- matrix(reclassVector, 
-#                               ncol=2, byrow = TRUE)
-# coverClassRaster <- reclassify(coverClassRaster,
-#                      reclassMatrix)
-
-plot(coverClassRaster) #visually check coverClassRaster
-
-```
-
-Then we input a raster that gives cover types in non forested areas
-
-```{r getNonForRaster}
-
-nameNonForRaster <- "LCC2005_V1_4a.tif" #specify file name
-folderUrlNonFor <- "https://drive.google.com/file/d/1E3iQRfaSPx0-b2GTgbLZqjo2Nhom39EK/view?usp=sharing"
-archiveNonFor <- "LCC2005_V1_4a.zip" #give archive name
-
-nonForRaster <- prepInputs(targetFile = nameNonForRaster, 
-                        url = folderUrlNonFor,
-                        archive = archiveNonFor, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
-                        #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
-                        studyArea = studyArea,
-                        useCache = getOption("reproducible.useCache", FALSE),
-                        overwrite = TRUE,
-                        verbose = TRUE)
-
-names(nonForRaster) <- c("nonForRaster")
-
-nonForRaster <- overlay(x = nonForRaster, y = coverClassRaster, fun = function(x, y) {
-                         x[!is.na(y[])] <- NA
-                          return(x)
-                            })
-
-#rename the categories found in the rasters
-# namesValues <- unique(nonForRaster)
-# newVals <- unlist(lapply(X = namesValues, FUN = function(x) {
-# newVal <-  as.factor(paste0("NF", x))    
-#     return(newVal)
-#   }))
-# reclassVector <- c(rbind(namesValues, newVals))
-# reclassMatrix <- matrix(reclassVector, 
-#                               ncol=2, byrow = TRUE)
-# nonForRaster <- reclassify(nonForRaster,
-#                      reclassMatrix)
-
-plot(nonForRaster) #visually check nonForRaster
-
-```
-
-We then combine the nonForRaster and the coverClassRaster so that we have a single raster giving the cover types (both forested and non-forested) over the study region. 
-
-```{r createLandscapeRaster}
-
-landscapeRaster <- cover(x = coverClassRaster,
-                         y = nonForRaster,
-                         filename = "landscapeRaster",
-                         overwrite = TRUE )
-
-names(landscapeRaster) <- c("landscapeRaster")
-
-plot(landscapeRaster) #visually check nonForRaster
-
-```
-
-Finally, we input a raster that gives the ages of the forested areas in age classes. 
-
-```{r getAgeClassRaster}
-
-nameAgeClassShapefile <- "ageGroupRasABBC.tif" #specify file name
-folderUrlAgeClass <- "https://drive.google.com/file/d/1cfrb-RhiwMD4XlS_yzRSQYPVh8ffwC0L/view?usp=sharing"
-archiveAgeClass <- "vegTypeABBC.zip" #give archive name
-
-ageClassRaster <- prepInputs(targetFile = nameAgeClassShapefile, 
-                        url = folderUrlAgeClass,
-                        archive = archiveAgeClass, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
-                        #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
-                        studyArea = studyArea,
-                        overwrite = TRUE,
-                        verbose = TRUE)
-
-names(ageClassRaster) <- c("ageClassRaster")
-
-plot(ageClassRaster) #visually check coverClassRaster
-```
-
-##TODO: get KNN age raster to get non forested ages
-
 # Create data table of bird density by landscape
 
 A `data.table` is created, containing the number of cells of each land cover class that are found in the `landscapeRaster`, and the variance between bootstrap replicates, mean bird density for each land cover class. The variance, and the standard error of this mean density is also calculated and included. 
@@ -349,13 +417,15 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
     
     ## take the values from the rasters and input them to a data table called cellValues
     cellValues <- data.table(getValues(landBirdRasterStack))
-    cellValues <- setnames(cellValues, c( "birdDensity", "landCoverClass", "ageClass"))
+    cellValues <- setnames(cellValues, c( "birdDensity", "landForClass", "age", "forestedStatus"))
     
-    cellValues <- na.omit(cellValues) ## remove any rows with NA
     
-    ## make landCoverClass categorical rather than numerical
-    cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) 
-    cellValues$ageClass <- as.factor(cellValues$ageClass) 
+    #get rid of any rows with NA values
+    cellValues <- na.omit(cellValues) 
+    
+    ## make sure landForClass and forestedStatus are categorical rather than numerical
+    cellValues$landForClass <- as.factor(cellValues$landForClass) 
+    cellValues$forestedStatus <- as.factor(cellValues$forestedStatus)
     
     return(cellValues)
   })
@@ -368,7 +438,7 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
 
 ```{r getBirdDataset}
 
-landscapeRastersStack <- raster::stack(landscapeRaster, ageClassRaster)
+landscapeRastersStack <- raster::stack(landscapeRaster, ageRaster, FNFRaster)
 
 birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
                                landscapeClassesRasterStack = landscapeRastersStack )
@@ -376,6 +446,8 @@ birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
 for (i in names(birdDatasets)) {
   attr(birdDatasets[[i]],"Species") <- i ## attr(birdDatasets$OVEN, "Species")
 }
+
+
 ```
 
 
@@ -390,7 +462,7 @@ getBirdStatsByClass <- function(birdDatasets) {
   birdStatsByClass <- lapply(X = birdDatasets, FUN = function(singleBirdDataset) {
     print(attr(singleBirdDataset, "Species")) ## TODO: use messages
     flush.console() ## TODO: remove!
-    birdStats <- singleBirdDataset[order(landCoverClass) # order the rows by the land cover class
+    birdStats <- singleBirdDataset[order(landForClass) # order the rows by the land cover class
                                    ][,list(classCount = .N, # get the number of cells each cover class
                                            #meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
                                            meanBirdDensity = mean(birdDensity), #try log of mean bird density
@@ -398,7 +470,7 @@ getBirdStatsByClass <- function(birdDatasets) {
                                            seBirdDensity = std.error(birdDensity), # get the standard error for bird density for each cover class
                                            normality = tryCatch(ad.test(birdDensity)$p.value,error = function(cond) { return(NaN) }), #ifelse(mean(birdDensity) > 0, tryCatch(ad.test(birdDensity)$p.value,error = function(cond){return(NA)}), NA),
                                            unimodality =   dip.test(birdDensity)$p.value),
-                                     by = landCoverClass]
+                                     by = landForClass]
 
     return(birdStats)
   })
@@ -474,7 +546,7 @@ assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 
 ```{r plotbirdStatsbyClass}
 plotsBirdStatsByClass <- lapply(X = birdStatsByClass, FUN = function(singleBirdStats) {
-  plotBirdStatsByClass <- ggplot(data = singleBirdStats, aes(x = landCoverClass, y = meanBirdDensity)) +
+  plotBirdStatsByClass <- ggplot(data = singleBirdStats, aes(x = landForClass, y = meanBirdDensity)) +
     geom_bar(stat = "identity", width = 0.7, fill = "steelblue") +
     theme_classic() +
     ggtitle("Mean Ovenbird Density by Cover Class") +
@@ -494,9 +566,9 @@ getKernelDensityData <- function(birdDatasets) {
   namesBirdsAnalysed <- names(birdDatasets) 
   
   birdKernelDensities <- lapply(X = birdDatasets, FUN = function(singleBirdDataset) {
-    namesClasses <- levels(singleBirdDataset$landCoverClass)
+    namesClasses <- levels(singleBirdDataset$landForClass)
     classKernelDensities <- lapply(X = namesClasses, FUN = function(coverType) {
-      dataForDensity <- singleBirdDataset[landCoverClass == coverType]
+      dataForDensity <- singleBirdDataset[landForClass == coverType]
       singleClassDensity <- density(dataForDensity[,birdDensity])
       
       return(singleClassDensity)
@@ -541,7 +613,7 @@ kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for ti
 # plotsVarBirdDensity <- lapply(X = birdStatsByClass,
 #                               FUN = function(singleBirdStats){
 #                                 
-# plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
+# plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =landForClass, y = varBirdDensity)) + geom_bar(stat="identity")
 # 
 # return(plotVarBirdDensity)
 # 
@@ -550,41 +622,46 @@ kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for ti
 
 # 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
 
+- contact Ana to get numeric ages, not categorical.
+- filter out non-forested types from input table, resolve factor level issue so non-forested are not included
+- for the test-case we can fit brt with n = 1400000, but may take time if it is more. 
+- then can fit gbm: gbm::gbm(formula = birdDensity ~ landForClass + age, distribution = "gaussian", data = birdDatasets$meanOVEN)
+- to predict, need prediction df that gives the mid-points of the target age classes in the final matrix, and forest types (function expand?)
+- convert results to a matrix rows = forest types, columns = 10 year age classes
+- package results - matrix, age class bins metadata, 1D binning results for non-forest types
+
 ```{r fitBRT }
- 
 
- 
+#separate out data table rows that are forested
+ForOvenDF <- birdDatasets$meanOVEN[forestedStatus == "1"]
+
+#fit gbm
+birdData <- ForOvenDF
+gbmFitted <- gbm::gbm(formula = birdDensity ~ landForClass + age, distribution = "gaussian", data = birdData)
+
+#generate prediction df using expand(?)
+birdPredictDF <- expand(birdData)
+
+#do prediction 
+#(object, newdata, n.trees, type = "link", single.tree = FALSE,...)
+gbmPred <- gbm::predict.gbm(object = gbmFitted,
+                 newdata = birdPredictDF)  
+  
+
+#form matrix
+#calculate nc
+#calculate nr
+birdMatrix <- as.matrix(gbmPred, 
+                        nrows= nr, ncols = nc, 
+                        by.rows = TRUE)
+
+
+
+
 ```
 
-```{r createExampleAgeRaster, eval = FALSE}
 
-#create example ageRaster
-# ageRaster <- raster::raster(ncol = 1168, nrow = 2632,
-#                             xmn = -1613250, xmx = -1321250, ymn = 7501750, ymx = 8159750)
-# projection(ageRaster) <- "+proj=lcc +lat_0=0 +lon_0=-95 +lat_1=49 +lat_2=77 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
-# values(ageRaster) <- sample(1:200, ncell(ageRaster), replace=TRUE)
-# ageRaster <- postProcess(x = ageRaster,
-#                          filename2 = "ageRaster",
-#                          rasterToMatch = rasterToMatch,
-#                          studyArea = studyArea,
-#                          cache = TRUE,
-#                          overwrite = TRUE)
-#  plot(ageRaster)
-#  
-#  #reclassify into 10 year age classes
-#  
-#  ages <- c(1:200)
-#  ageClasses <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
-#                  110, 120, 130, 140, 150, 160, 170, 180, 190, 200) 
-#  
-# 
-# ageClassMatrix <- matrix(ageClasses, 
-#                               ncol=2, byrow = TRUE)
-# 
-# ageClassRaster <- reclassify(ageRaster,
-#                      ageClassMatrix)
-# 
-#  
-```
+#NEXT MODULE: MAPPING MODULE
 
+Inputs: matrix/package 
 
