@@ -168,7 +168,7 @@ kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
 kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
                                           coverType = "7", #cover type name for title
                                           birdCoverDensity = kernelDensityData$OVEN$"7", #which kernel density cover type and bird species to plot
-                                          meanData = birdStatsByClass$OVEN[7,meanBirdDensity] #show a red line with the mean density
+                                          meanData = birdStatsByClass$OVEN[7, meanBirdDensity] #show a red line with the mean density
 )
 #which sp and cover type to graph 
 ```
