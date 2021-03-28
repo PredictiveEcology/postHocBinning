@@ -1,2 +1,176 @@
-Any other details that a user may need to know, like where to get more information,
-where to download data, etc.
+---
+title: "postHocBinning"
+author: "Alex M. Chubaty & Isolde Lane-Shaw"
+date: "15 March 2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = "hold")
+```
+
+# Overview
+
+This module predicts expected bird densities based on land cover classification.
+
+# Usage
+
+```{r module_usage}
+library(Require)
+Require("SpaDES.core")
+setPaths(modulePath = file.path(".."),
+         inputPath = file.path("data"),
+         outputPath = "outputs")
+times <- list(start = 0, end = 10)
+parameters <- list(
+  postHocBinning = list()
+)
+modules <- list("postHocBinning")
+objects <- list()
+inputs <- list()
+outputs <- list()
+mySimOut <- simInitAndSpades(times = times, params = parameters, modules = modules, objects = objects)
+```
+# Parameters
+
+Provide a summary of user-visible parameters.
+
+```{r moduleParams, echo = FALSE}
+df_params <- moduleParams("postHocBinning", "..")
+knitr::kable(df_params)
+```
+
+# Events
+
+Describe what happens for each event type.
+
+## Plotting
+
+Write what is plotted.
+
+## Saving
+
+Write what is saved.
+
+# Data dependencies
+
+## Input data
+
+```{r moduleInputs, echo = FALSE}
+df_inputs <- moduleInputs("postHocBinning", "..")
+knitr::kable(df_inputs)
+```
+
+## Output data
+
+Description of the module outputs.
+
+```{r moduleOutputs, echo = FALSE}
+df_outputs <- moduleOutputs("postHocBinning", "..")
+knitr::kable(df_outputs)
+```
+
+# Links to other modules
+
+Describe any anticipated linkages to other modules.
+
+<!-- TODO: move everything below here into module code, e.g. defaults -->
+
+```{r callLoad250mBootFunction}
+birdsList <- c("BAWW", "OVEN") #specify the bird species
+folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
+birdRasterStack <- load250mBootRasters(folderUrl = folderUrlBird,
+                                       birdsList = birdsList,
+                                       rastersPath = downloadFolderBird,
+                                       rasterToMatch = landscapeRaster,
+                                       studyArea = studyArea)
+noBootsDFLocation <- "https://drive.google.com/file/d/1ldESo9gb6icRD8ZsuPgaEDSIwFjJEe4W"
+noBootsDF <- drive_download(file = noBootsDFLocation, 
+                            path = file.path(downloadFolderBird, "noBootsDF"),
+                            type = "spreadsheet",
+                            overwrite = TRUE)
+```
+
+# Create data table of bird density by landscape
+
+A `data.table` is created, containing the number of cells of each land cover class that are found in the `landscapeRaster`, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
+
+The first step is to gather the values from the rasters and create a clean dataset.
+We then  calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
+
+## Get bird dataset
+
+Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`.
+
+```{r functionGetBirdDataset}
+getBirdDataset <- function(birdRasterStack, categoriesRaster) {
+  reproducible::Require("raster")
+  
+  meanBirdRasters <- names(birdRasterStack) %>%
+    str_detect('mean') %>%
+    keep(birdRasterStack, .)
+  namesMeanBirdRasters <- names(meanBirdRasters)
+  
+  birdDatasets <- lapply(X = meanBirdRasters, FUN = function(birdRasterLayer) {
+    landBirdRasterStack <- raster::stack(categoriesRaster, birdRasterLayer)
+    ## take the values from the rasters and input them to a data table calledcellValues
+    cellValues <- data.table(getValues(landBirdRasterStack))
+    cellValues <- setnames(cellValues, c("landCoverClass", "birdDensity"))
+    
+    cellValues <- na.omit(cellValues) ## remove any rows with NA
+    
+    ## make landCoverClass categorical rather than numerical
+    cellValues$landCoverClass <- as.factor(cellValues$landCoverClass) 
+    
+    return(cellValues)
+  })
+  
+  names(birdDatasets) <- meanBirdRasters
+  return(birdDatasets)
+}
+```
+
+```{r getBirdDataset}
+birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
+                               categoriesRaster = landscapeRaster)
+for (i in names(birdDatasets)) {
+  attr(birdDatasets[[i]], "Species") <- i ## attr(birdDatasets$OVEN, "Species")
+}
+```
+
+```{r getBirdStatsbyClass}
+birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
+for (i in names(birdStatsByClass)) {
+  attr(birdStatsByClass[[i]], "Species") <- i
+}
+```
+
+```{r getAssumptionsSummary}
+assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
+```
+
+```{r getKernelDensityData}
+kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
+```
+
+```{r getKernelDensityPlot}
+kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
+                                          coverType = "7", #cover type name for title
+                                          birdCoverDensity = kernelDensityData$OVEN$"7", #which kernel density cover type and bird species to plot
+                                          meanData = birdStatsByClass$OVEN[7,meanBirdDensity] #show a red line with the mean density
+)
+#which sp and cover type to graph 
+```
+
+```{r plotVarBirdDensity}
+# plotsVarBirdDensity <- lapply(X = birdStatsByClass,
+#                               FUN = function(singleBirdStats){
+#                                 
+# plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =landCoverClass, y = varBirdDensity)) + geom_bar(stat="identity")
+# 
+# return(plotVarBirdDensity)
+# 
+# })
+```
