@@ -38,6 +38,7 @@ Require("gbm")
 Require("dplyr")
 Require("tidyverse")
 Require("reshape2")
+#Require("tidyr")
 
 inputsDir <- checkPath("inputs", create = TRUE)
 outputsDir <- checkPath("outputs", create = TRUE)
@@ -419,7 +420,7 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
     ## take the values from the rasters and input them to a data table called cellValues
     cellValues <- data.table(getValues(landBirdRasterStack))
     cellValues <- setnames(cellValues, c( "birdDensity", "landForClass", "age", "forestedStatus"))
-    
+    cellValues <- unite(cellValues, uniqueClasses, c(forestedStatus, landForClass), remove=FALSE)
     
     #get rid of any rows with NA values
     cellValues <- na.omit(cellValues) 
@@ -427,6 +428,7 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
     ## make sure landForClass and forestedStatus are categorical rather than numerical
     cellValues$landForClass <- as.factor(cellValues$landForClass) 
     cellValues$forestedStatus <- as.factor(cellValues$forestedStatus)
+    cellValues$uniqueClasses <- as.factor(cellValues$uniqueClasses)
     
     return(cellValues)
   })
@@ -472,6 +474,8 @@ getBirdStatsByClass <- function(birdDatasets) {
                                            normality = tryCatch(ad.test(birdDensity)$p.value,error = function(cond) { return(NaN) }), #ifelse(mean(birdDensity) > 0, tryCatch(ad.test(birdDensity)$p.value,error = function(cond){return(NA)}), NA),
                                            unimodality =   dip.test(birdDensity)$p.value),
                                      by = list(forestedStatus, landForClass)]
+    
+    birdStats <- unite(birdStats, uniqueClasses, c(forestedStatus, landForClass), remove=FALSE)
 
     return(birdStats)
   })
@@ -488,6 +492,22 @@ birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
 for (i in names(birdStatsByClass)) {
   attr(birdStatsByClass[[i]], "Species") <- i
 } ## TODO: don't repeat yourself. if you need to do the same thing multiple times, use a function
+
+```
+
+```{r separateByForStat}
+
+#get non-Forest 1D data together
+nonforBirdPreds <- lapply(X = birdStatsByClass, FUN = function(singleBirdDF) {
+
+#separate out data table rows that are forested, get rid of unnecessary forestedStatus column
+nonforestedDF <- singleBirdDF[forestedStatus == "0"]
+nonforestedDF <- subset(nonforestedDF, select = c("landForClass", "meanBirdDensity", "varBirdDensity", "seBirdDensity", "normality", "unimodality"))
+nonforestedDF <- droplevels(nonforestedDF)
+
+return(nonforestedDF)
+})
+
 ```
 
 ## Are the normality and unimodality tests passed?
@@ -545,20 +565,46 @@ assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 
 ## Plot mean bird density by land cover class with SE bars
 
-TODO: MAKE WORK BY FOREST STATUS AS WELL AS BY FOREST CLASS
-
 ```{r plotbirdStatsbyClass}
-plotsBirdStatsByClass <- lapply(X = birdStatsByClass, FUN = function(singleBirdStats) {
-  plotBirdStatsByClass <- ggplot(data = singleBirdStats, aes(x = landForClass, y = meanBirdDensity)) +
-    geom_bar(stat = "identity", width = 0.7, fill = "steelblue") +
+
+plotsMeanBirdDensity <- lapply(X = birdStatsByClass,
+                              FUN = function(singleBirdStats){
+                                
+plotMeanBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = meanBirdDensity, fill = forestedStatus)) +
+    geom_bar(stat = "identity", width = 0.7) +
     theme_classic() +
-    ggtitle("Mean Ovenbird Density by Cover Class") +
-    theme(axis.text = element_text(size = 7)) +
+    ggtitle(paste0("Mean bird density by cover class")) +
+    xlab("Cover Class") +
+    theme(axis.text = element_text(size = 6)) +
     geom_errorbar(aes(ymin = meanBirdDensity - seBirdDensity, ymax = meanBirdDensity + seBirdDensity), width = .15) 
  
-return(plotsBirdStatsByClass)
+return(plotMeanBirdDensity)
+
 })
+
+plotsMeanBirdDensity$meanOVEN
 ```
+
+```{r plotVarBirdDensity}
+
+plotsVarBirdDensity <- lapply(X = birdStatsByClass,
+                              FUN = function(singleBirdStats){
+
+plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
+   theme_classic() +
+  ggtitle(paste0("Variance in bird density by cover class")) +
+  xlab("Cover Class") +
+    theme(axis.text = element_text(size = 6)) +
+  geom_bar(stat = "identity", width = 0.7) 
+
+return(plotVarBirdDensity)
+
+})
+
+plotsVarBirdDensity$meanOVEN
+```
+
+
 
 # Examine the data using a kernel density plot
 
@@ -569,9 +615,9 @@ getKernelDensityData <- function(birdDatasets) {
   namesBirdsAnalysed <- names(birdDatasets) 
   
   birdKernelDensities <- lapply(X = birdDatasets, FUN = function(singleBirdDataset) {
-    namesClasses <- levels(singleBirdDataset$landForClass)
-    classKernelDensities <- lapply(X = namesClasses, FUN = function(coverType) {
-      dataForDensity <- singleBirdDataset[landForClass == coverType]
+    namesClasses <- levels(singleBirdDataset$uniqueClasses)
+      classKernelDensities <- lapply(X = namesClasses, FUN = function(coverType) {
+      dataForDensity <- singleBirdDataset[uniqueClasses == coverType]
       singleClassDensity <- density(dataForDensity[,birdDensity])
       
       return(singleClassDensity)
@@ -597,42 +643,28 @@ getKernelDensityPlot <- function(birdCoverDensity, birdName, coverType, meanData
   densityPlot <- plot(birdCoverDensity,
                       main = paste0("Kernel Density for ", paste0(birdName), " in CC", coverType),
                       xlab = "Predicted Bird Density",
-                      ylab = "Density of predictions") + ## TODO: this is NOT ggplot!
-  abline(v = meanData, col = "red")
+                      ylab = "Density of predictions") 
   return(densityPlot)
 }
 ```
 
 ```{r getKernelDensityPlot}
 kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
-                                          coverType = "7", #cover type name for title
-                                          birdCoverDensity = kernelDensityData$OVEN$"7", #which kernel density cover type and bird species to plot
-                                          meanData = birdStatsByClass$OVEN[7,meanBirdDensity] #show a red line with the mean density
-)
-#which sp and cover type to graph 
+                                          coverType = "7, forested", #cover type name for title
+                                          birdCoverDensity = kernelDensityData$meanOVEN$"1_7") #which kernel density cover type and bird species to plot 
 ```
 
-```{r plotVarBirdDensity}
-# plotsVarBirdDensity <- lapply(X = birdStatsByClass,
-#                               FUN = function(singleBirdStats){
-#                                 
-# plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =landForClass, y = varBirdDensity)) + geom_bar(stat="identity")
-# 
-# return(plotVarBirdDensity)
-# 
-# })
-```
+
 
 # 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
 
-- do this for forested areas only
-- for the test-case we can fit brt with n = 1400000, but may take time if it is more. 
-- to predict, need prediction df that gives the mid-points of the target age classes in the final matrix, and forest types (function expand?)
-- convert results to a matrix rows = forest types, columns = 10 year age classes
-
+- for forested areas only
+ 
 ```{r fitBRT }
 
-ageGrouping <- 10
+#define how you want the age classes to be (parameter)
+ageGrouping <- 10 #how many years included per age class
+maxAgeClass <- 15 #what the oldest age class will be (everything older will be included in this class)
 
 birdMatricies <- lapply(X = birdDatasets, FUN = function(birdDF) {
 
@@ -663,7 +695,6 @@ gbmPred <- gbm::predict.gbm(object = gbmFitted,
 #I need to get average of every ten columns into one
 noAgeClasses <- maxAge/ageGrouping
 ageClasses <- rep(1:noAgeClasses, each = ageGrouping)
-maxAgeClass <- 15
 ageClasses <- ifelse(ageClasses < maxAgeClass, ageClasses, maxAgeClass)
 gbmPredDF <- cbind(birdPredictDF, gbmPred, ageClasses)
 #TODO in the future add weight averages by gbm prediction variance
@@ -683,40 +714,16 @@ birdMatrix <- reshape2::acast(gbmPredDF,
 
 ```{r packageOutputResults }
 
-#get non-Forest 1D data together
-nonforBirdPreds <- lapply(X = birdDatasets, FUN = function(singleBirdDF) {
+# create table defining age classes
+ages <- rep(1:(maxAgeClass*ageGrouping))
+ageClasses <- rep(1:maxAgeClass, each = ageGrouping)
+ageClassDefs <- cbind(ages,ageClasses)
 
-#separate out data table rows that are forested, get rid of unnecessary forestedStatus column
-nonforestedDF <- singleBirdDF[forestedStatus == "0"]
-nonforestedDF <- subset(nonforestedDF, select = c("birdDensity", "landForClass", "age"))
-nonforestedDF <- droplevels(nonforestedDF)
-
-return(nonforestedDF)
-})
 
 #make list object of all module outputs needed for Mapping Module 
-birdPreds <- list(birdMatricies, nonforBirdPreds, ageGrouping) #TODO give age and ageclass in table not just ageGrouping
-names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassSize")
+birdPreds <- list(birdMatricies, nonforBirdPreds, ageGrouping) 
+names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassDefs")
 
 ```
 
-#NEXT MODULE: MAPPING MODULE
-
-Inputs: birdPreds, a raster of cover, a raster of age
-Outputs: raster brick of bird density precictions across the landscape for bird sps in birdPreds 
-
-1) get inputs
-      - crop and mask the rasters of cover/age to the study area? 
-2) determine which areas of landscape are forest and non forest
-      - (using FNFRaster? do I need to add that to birdPreds inputs?)- YES
-3) if not already done, reclassify the landscape/forest cover and age rasters according to age and cover classes we have given
-      - use Ana's module for the landscape/forest classes  - YES, ANA WILL PROVIDE
-4) create a raster of bird densities across the non-forested areas of the landscape 
-      -reclassify() function to reclassify non-forested areas using nonForBirdPreds as the reclassification matrix
-      - to do this will have to reform nonForBirdPreds into a matrix using matrix(), and get rid of the age data
-5) create a raster of bird densities across the forested areas 
-      - do this based on the forest cover and age class rasters stacked together and the birdMatrices
-      - what function is best for this? 
-6) put non-forested and forested rasters together into one raster of birdDensities using cover() function
-7) output this raster from the module
 
