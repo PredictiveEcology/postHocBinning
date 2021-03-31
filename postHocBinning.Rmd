@@ -13,8 +13,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-In the following code chunks, rasters showing Canadian land cover classes and predicted densities of a given bird species across Canada will be inputted.
-The data will be extracted and used, for a given study area, to predict expected densities of the bird for each of the land cover classes.
+In order to manage and conserve bird species within the boreal forest is is necessary to be able to predict bird species abundance across future/hypothetical landscapes, based off of reliable models and data. To this end, a series of national models of bird density have been created based off the Boreal Avian Modelling (BAM) Project dataset (Boreal Avian Modelling Project, 2020). The BAM dataset is a collation of over 100 avian studies from across the Canadian boreal region (the majority of which comprise point-count data). In the most recent version of these models, a series of bootstrapped bird density predictions for the Canadian boreal region are output as rasters, at a resolution of 250m2. 
+
+Due to the heterogenous nature of the environment and the extensive quantity of data available in these rasters a degree of simplification is necessary in order to make predictions about bird abundance on future or hypothetical landscapes. To this end, this module serves to distill the  bird density predictions data, grouping it according to broad forest and land cover types. 
+
+This module calculates predicted bird densities from the mean of the most recent bootstrapped BAM national models of bird density rasters, for each of a given set of cover and age classes according to two different methods:
+  - 1D, where a single variable, underlying cover class, is used to bin data points of predicted bird density, by calculating the mean. This method is used for both forested and non-forested cover classes.
+  - 2D, where a gbm is used to give a predicted bird density according the combination of two variables, cover class and age. The predicted bird densities are then further binned according to the mean value of the desired age classes. This method is used for forested cover classes only.  
 
 # Load essential packages and setup directories
 
@@ -49,17 +54,17 @@ downloadFolderForestClass <- checkPath(file.path(inputsDir, "forestClassRasters"
 ```
 
 
-#Get rasterToMatch
+#Get rasterToMatch and study area files
 
 Here the LLC2005 raster layer of Canada is read in using the `LandR::prepInputsLCC` function.
-It will be used as the `rasterToMatch` layer for other spatial layers to reproject to, and will also provide land cover classification data.
+It will be used as the `rasterToMatch` layer for other spatial layers to reproject, crop and mask to.
 
 ```{r LCC2005}
 rasterToMatch <- LandR::prepInputsLCC(destinationPath = inputsDir) 
 ```
 
 
-#Define Study Area
+##Define Study Area
 
 The study area that we are interested in is then downloaded and read in using the prepInputs function. In this example we are using an area of North-East British Columbia. 
 
@@ -90,6 +95,8 @@ rasterToMatch <- raster::mask(rasterToMatch, studyArea) #mask landscapeRaster to
 # Get Landscape Data
 
 Here we download and load the rasters giving data on the landscape. 
+
+## Input land cover class rasters
 
 First we download a raster that gives the forest cover types, in forested areas.
 
@@ -132,7 +139,7 @@ plot(forClassRaster) #visually check forClassRaster
 
 ```
 
-Then we input a raster that gives cover types in non forested areas
+Then we input a raster that gives cover types in non forested areas. In this example the LCC05 map of Canada is used. 
 
 ```{r getNonForRaster}
 
@@ -191,6 +198,10 @@ plot(landscapeRaster) #visually check nonForRaster
 
 ```
 
+## Create raster giving status of the landcover as forested or non-forested
+
+This is based on the presence or abscence of data in the forClassRaster.
+
 ```{r createFNFRaster}
 
 #create a raster that gives if an area is forest or not (0 for non-forest, 1 for forest)
@@ -223,6 +234,8 @@ plot(FNFRaster) #visually check FNFRaster
 
 ```
 
+## Age Raster Input 
+
 Finally, we input a raster that gives the ages of the forested areas in age classes. 
 
 ```{r getForAgeRaster}
@@ -248,7 +261,7 @@ names(forAgeRaster) <- c("forAgeRaster")
 plot(forAgeRaster) #visually check ageRaster
 ```
 
-##Get KNN age raster to fill in non forested ages
+### Get KNN age raster to fill in non forested ages
 
 ```{r getkNNAgeRaster}
 
@@ -334,9 +347,7 @@ download250mBootRasters <-
   }
 ```
 
-
 The download bird function is called by a second defined function, which postprocesses (reprojects, crops and masks according to the given rasterToMatch and studyArea) and loads the rasters in a raster stack.   
-
 
 ```{r functionLoad250mBootRasters}
 load250mBootRasters <- function(birdsList,
@@ -395,12 +406,11 @@ noBootsDF <- drive_download(file = noBootsDFLocation,
 
 A `data.table` is created, containing the number of cells of each land cover class that are found in the `landscapeRaster`, and the variance between bootstrap replicates, mean bird density for each land cover class. The variance, and the standard error of this mean density is also calculated and included. 
 
-The first step is to gather the values from the rasters and create a clean dataset.
-We then  calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
+The first step is to gather the values from the rasters and create a clean dataset. We then  calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
 
 ## Get bird dataset
 
-Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`.
+Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`, alongside the corresponding landscape and age raster cells.
 
 ```{r functionGetBirdDataset}
 
@@ -456,7 +466,7 @@ for (i in names(birdDatasets)) {
 
 #1D post-hoc binning predictions of bird densities by cover type alone
 
-## Get bird densities by cover class
+## Get bird densities by cover class and calculate statistics
 
 ```{r functionGetBirdStatsByClass}
 getBirdStatsByClass <- function(birdDatasets) {
@@ -495,22 +505,10 @@ for (i in names(birdStatsByClass)) {
 
 ```
 
-```{r separateByForStat}
 
-#get non-Forest 1D data together
-nonforBirdPreds <- lapply(X = birdStatsByClass, FUN = function(singleBirdDF) {
+##Explore the produced 1D bird density predictions
 
-#separate out data table rows that are forested, get rid of unnecessary forestedStatus column
-nonforestedDF <- singleBirdDF[forestedStatus == "0"]
-nonforestedDF <- subset(nonforestedDF, select = c("landForClass", "meanBirdDensity", "varBirdDensity", "seBirdDensity", "normality", "unimodality"))
-nonforestedDF <- droplevels(nonforestedDF)
-
-return(nonforestedDF)
-})
-
-```
-
-## Are the normality and unimodality tests passed?
+### Are the normality and unimodality tests passed?
 
 ```{r functionGetAssumptionsSummary}
 getAssumptionsSummary <- function(birdStatsTables) {
@@ -563,7 +561,7 @@ getAssumptionsSummary <- function(birdStatsTables) {
 assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 ```
 
-## Plot mean bird density by land cover class with SE bars
+### Plot mean bird density by cover class with SE bars
 
 ```{r plotbirdStatsbyClass}
 
@@ -582,8 +580,10 @@ return(plotMeanBirdDensity)
 
 })
 
-plotsMeanBirdDensity$meanOVEN
+plotsMeanBirdDensity$meanOVEN #show an example
 ```
+
+### Plot variance in bird density by cover class 
 
 ```{r plotVarBirdDensity}
 
@@ -601,14 +601,14 @@ return(plotVarBirdDensity)
 
 })
 
-plotsVarBirdDensity$meanOVEN
+plotsVarBirdDensity$meanOVEN #show an example
 ```
 
 
 
-# Examine the data using a kernel density plot
+### Examine the data using a kernel density plot
 
-### Get Kernel Density Data and Store in Lists
+#### Get Kernel Density Data 
 
 ```{r getKernelDensityDataFunction}
 getKernelDensityData <- function(birdDatasets) {
@@ -636,7 +636,7 @@ getKernelDensityData <- function(birdDatasets) {
 kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
 ```
 
-## Plot a Particular Kernel Density Data
+#### Plot an Example Kernel Density Data
 
 ```{r getKernelDensityPlotFunction}
 getKernelDensityPlot <- function(birdCoverDensity, birdName, coverType, meanData) {
@@ -658,7 +658,7 @@ kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for ti
 
 # 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
 
-- for forested areas only
+This is carried out for forested cover classes only.
  
 ```{r fitBRT }
 
@@ -712,6 +712,23 @@ birdMatrix <- reshape2::acast(gbmPredDF,
 
 ```
 
+### Gather together data to be output by module
+
+```{r separateNonForStat}
+
+#get non-Forest 1D data together
+nonforBirdPreds <- lapply(X = birdStatsByClass, FUN = function(singleBirdDF) {
+
+#separate out data table rows that are forested, get rid of unnecessary forestedStatus column
+nonforestedDF <- singleBirdDF[forestedStatus == "0"]
+nonforestedDF <- subset(nonforestedDF, select = c("landForClass", "meanBirdDensity", "varBirdDensity", "seBirdDensity", "normality", "unimodality"))
+nonforestedDF <- droplevels(nonforestedDF)
+
+return(nonforestedDF)
+})
+
+```
+
 ```{r packageOutputResults }
 
 # create table defining age classes
@@ -727,3 +744,6 @@ names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassDefs")
 ```
 
 
+# References
+
+Boreal Avian Modelling Project, 2020. BAM Generalized National Models Documentation, Version 4.0. Available at https://borealbirds.github.io/. DOI: 10.5281/zenodo.4018335. 
