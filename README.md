@@ -39,6 +39,7 @@ Everything the module does happens in the init event.
 ## Input data
 
 rasterToMatch - a raster file of Canada to set the crs 
+
 studyArea - a shapefile of the desired area of Canada to be examined
 
 ## Output data
