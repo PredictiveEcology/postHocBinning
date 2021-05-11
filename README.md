@@ -40,10 +40,6 @@ Everything the module does happens in the init event.
 
 rasterToMatch - a raster file of Canada to set the crs 
 studyArea - a shapefile of the desired area of Canada to be examined
-forClassRaster - a raster map giving the desired land cover classes for forested areas found in the study area
-nonForRaster - a raster map giving the desired land cover classes for non-forested areas found in the study area
-forAgeRaster - a raster map giving the ages of forested areas found in the study area
-kNNAgeRaster - a raster map giving the ages of non-forested areas found in the study area
 
 ## Output data
 
