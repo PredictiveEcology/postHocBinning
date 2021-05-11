@@ -738,7 +738,7 @@ ageClassDefs <- cbind(ages,ageClasses)
 
 
 #make list object of all module outputs needed for Mapping Module 
-birdPreds <- list(birdMatricies, nonforBirdPreds, ageGrouping) 
+birdPreds <- list(birdMatricies, nonforBirdPreds, ageClassDefs) 
 names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassDefs")
 
 ```
