@@ -3,14 +3,16 @@ title: "1D Post-Hoc Binning"
 author: "Isolde Lane-Shaw"
 date: "03/31/2021"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 editor_options:
   chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE)
+
+knitr::opts_chunk$set(tidy = TRUE, tidy.opts=list(width.cutoff = 50, arrow = TRUE, indent = 2, brace.newline = TRUE), echo = TRUE, include = TRUE, message = FALSE, warning = FALSE)
+
 ```
 
 ```{r packages, include=FALSE}
@@ -61,8 +63,12 @@ This module calculates predicted bird densities from the mean of the most recent
 Here the LLC2005 raster layer of Canada is read in using the `LandR::prepInputsLCC` function.
 It will be used as the `rasterToMatch` layer for other spatial layers to reproject, crop and mask to.
 
-```{r LCC2005, include=TRUE}
-rasterToMatch <- LandR::prepInputsLCC(destinationPath = inputsDir) 
+```{r LCC2005workaround, include=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+rasterToMatch <- raster::raster("/home/ishaw/projects/postHocBinning/inputs/LCC2005_V1_4a.tif") 
+```
+
+```{r LCC2005, include=TRUE, tidy=TRUE, tidy.opts=list(width.cutoff=60)}
+#rasterToMatch <- LandR::prepInputsLCC(destinationPath = inputsDir) 
 ```
 
 
@@ -70,25 +76,34 @@ rasterToMatch <- LandR::prepInputsLCC(destinationPath = inputsDir)
 
 The study area that we are interested in is then downloaded and read in using the prepInputs function. In this example we are using an area of North-East British Columbia. 
 
-```{r studyArea}
-nameAreaShapefile <- "BCR6_BC.shp" #specify file name
+```{r studyArea, tidy=TRUE, tidy.opts=list(width.cutoff=80)}
+#specify file name
+nameAreaShapefile <- "BCR6_BC.shp" 
 folderUrlArea <- "https://drive.google.com/file/d/1SjUKXOcNqDUkRxRTjwgLlLFjb5LRzbHy"
-archiveArea <- "BCR6_BC.zip" #give archive name
+#give archive name
+archiveArea <- "BCR6_BC.zip" 
 
 studyArea <- prepInputs(targetFile = nameAreaShapefile, 
                         url = folderUrlArea,
                         archive = archiveArea, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderArea, #save the file to a folder in the working directory called studyArea
-                        fun = "raster::shapefile", #use the function shapefile
+                        #Extract other files with similar names
+                        alsoExtract = "similar", 
+                        #save the file to a folder in the 
+                        #working directory called studyArea
+                        destinationPath = downloadFolderArea, 
+                        #use the function shapefile
+                        fun = "raster::shapefile", 
                         targetCRS = crs(rasterToMatch),
-                        #rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        #use the specified rasterToMatch to reproject to
+                        #rasterToMatch = rasterToMatch, 
                         overwrite = TRUE,
                         verbose = TRUE)
 # studyArea <- spTransform(studyArea, crs(rasterToMatch))
 
-rasterToMatch <- raster::crop(rasterToMatch, studyArea) #create landscapeRaster by cropping rasterToMatch to studyArea
-rasterToMatch <- raster::mask(rasterToMatch, studyArea) #mask landscapeRaster to studyArea
+#create landscapeRaster by cropping rasterToMatch to studyArea
+rasterToMatch <- raster::crop(rasterToMatch, studyArea) 
+#mask landscapeRaster to studyArea
+rasterToMatch <- raster::mask(rasterToMatch, studyArea) 
 #landscapeRasters <- unstack(landscapeRastersStack)
 
 ```
@@ -105,18 +120,25 @@ First we download a raster that gives the forest cover types, in forested areas.
 
 ```{r getForClassRaster}
 
-nameForClassRaster <- "VegTypeABBC.tif" #specify file name
+#specify file name
+nameForClassRaster <- "VegTypeABBC.tif" 
 folderUrlForClass <- "https://drive.google.com/file/d/1cfrb-RhiwMD4XlS_yzRSQYPVh8ffwC0L/view?usp=sharing"
-archiveForClass <- "vegTypeABBC.zip" #give archive name
+#give archive name
+archiveForClass <- "vegTypeABBC.zip" 
 
 forClassRaster <- prepInputs(targetFile = nameForClassRaster, 
                         url = folderUrlForClass,
                         archive = archiveForClass, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
+                        #Extract other files with similar names
+                        alsoExtract = "similar", 
+                        #save the file to a folder in the 
+                        #working directory called forestClassRasters
+                        destinationPath = downloadFolderForestClass, 
+                        #use the function raster
                         #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        fun = "raster::raster", 
+                        #use the specified rasterToMatch to reproject to
+                        rasterToMatch = rasterToMatch, 
                         studyArea = studyArea,
                         useCache = getOption("reproducible.useCache", FALSE),
                         overwrite = TRUE,
@@ -147,18 +169,25 @@ Then we input a raster that gives cover types in non forested areas. In this exa
 
 ```{r getNonForRaster}
 
-nameNonForRaster <- "LCC2005_V1_4a.tif" #specify file name
+#specify file name
+nameNonForRaster <- "LCC2005_V1_4a.tif" 
 folderUrlNonFor <- "https://drive.google.com/file/d/1E3iQRfaSPx0-b2GTgbLZqjo2Nhom39EK/view?usp=sharing"
-archiveNonFor <- "LCC2005_V1_4a.zip" #give archive name
 
+#give archive name
+archiveNonFor <- "LCC2005_V1_4a.zip" 
 nonForRaster <- prepInputs(targetFile = nameNonForRaster, 
                         url = folderUrlNonFor,
                         archive = archiveNonFor, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
+                        #Extract other files with similar names
+                        alsoExtract = "similar", 
+                        #save the file to a folder in the 
+                        #working directory called forestClassRasters
+                        destinationPath = downloadFolderForestClass, 
+                        #use the function raster
+                        fun = "raster::raster", 
                         #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        #use the specified rasterToMatch to reproject to
+                        rasterToMatch = rasterToMatch, 
                         studyArea = studyArea,
                         useCache = getOption("reproducible.useCache", FALSE),
                         overwrite = TRUE,
@@ -166,14 +195,17 @@ nonForRaster <- prepInputs(targetFile = nameNonForRaster,
 
 names(nonForRaster) <- c("nonForRaster")
 
-nonForRaster <- overlay(x = nonForRaster, y = forClassRaster, fun = function(x, y) {
+nonForRaster <- overlay(x = nonForRaster, 
+                        y = forClassRaster, 
+                        fun = function(x, y) {
                          x[!is.na(y[])] <- NA
                           return(x)
                             })
 
 #rename the categories found in the rasters
 # namesValues <- unique(nonForRaster)
-# newVals <- unlist(lapply(X = namesValues, FUN = function(x) {
+# newVals <- unlist(lapply(X = namesValues, 
+# FUN = function(x) {
 # newVal <-  as.factor(paste0("NF", x))    
 #     return(newVal)
 #   }))
@@ -197,7 +229,8 @@ landscapeRaster <- cover(x = forClassRaster,
 
 names(landscapeRaster) <- c("landscapeRaster")
 
-plot(landscapeRaster) #visually check nonForRaster
+#visually check nonForRaster
+plot(landscapeRaster) 
 
 ```
 
@@ -209,8 +242,10 @@ This is based on the presence or abscence of data in the forClassRaster.
 
 ```{r createFNFRaster}
 
-#create a raster that gives if an area is forest or not (0 for non-forest, 1 for forest)
-#This will allow me to have a value in the birdDataset that says if a cell was forested or not
+#create a raster that gives if an area is forest or not 
+#(0 for non-forest, 1 for forest)
+#This will allow me to have a value in the birdDataset 
+#that says if a cell was forested or not
 
 #make forest 1
 valsFR <- unique(forClassRaster)
@@ -235,7 +270,8 @@ FNFRaster <- raster::mask(FNFRaster,rasterToMatch)
 
 names(FNFRaster) <- c("FNFRaster")
 
-plot(FNFRaster) #visually check FNFRaster
+#visually check FNFRaster
+plot(FNFRaster) 
 
 ```
 
@@ -245,18 +281,25 @@ Finally, we input a raster that gives the ages of the forested areas in age clas
 
 ```{r getForAgeRaster}
 
-nameForAgeRaster <- "ageRas.tif" #specify file name
+#specify file name
+nameForAgeRaster <- "ageRas.tif" 
 folderUrlAge <- "https://drive.google.com/file/d/1Ih4YLfIYX6nQcotdd41j4yRtZKRQxYo7/view?usp=sharing"
-archiveAge <- "ageRaster.zip" #give archive name
+#give archive name
+archiveAge <- "ageRaster.zip" 
 
 forAgeRaster <- prepInputs(targetFile = nameForAgeRaster, 
                         url = folderUrlAge,
                         archive = archiveAge, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
+                        #Extract other files with similar names
+                        alsoExtract = "similar", 
+                        #save the file to a folder in the working directory
+                        #called forestClassRasters
+                        destinationPath = downloadFolderForestClass, 
+                        #use the function raster
+                        fun = "raster::raster", 
                         #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        #use the specified rasterToMatch to reproject to
+                        rasterToMatch = rasterToMatch, 
                         studyArea = studyArea,
                         overwrite = TRUE,
                         verbose = TRUE)
@@ -270,19 +313,25 @@ names(forAgeRaster) <- c("forAgeRaster")
 Get KNN age raster to fill in non forested ages
 
 ```{r getkNNAgeRaster}
-
-namekNNAgeRaster <- "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" #specify file name
+#specify file name
+namekNNAgeRaster <- "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" 
 folderUrlkNNAge <- "https://drive.google.com/file/d/1Ih4YLfIYX6nQcotdd41j4yRtZKRQxYo7/view?usp=sharing"
-archivekNNAge <- "ageRaster.zip" #give archive name
+#give archive name
+archivekNNAge <- "ageRaster.zip" 
 
 kNNAgeRaster <- prepInputs(targetFile = namekNNAgeRaster, 
                         url = folderUrlkNNAge,
-                        archive = archivekNNAge, 
-                        alsoExtract = "similar", #Extract other files with similar names
-                        destinationPath = downloadFolderForestClass, #save the file to a folder in the working directory called forestClassRasters
-                        fun = "raster::raster", #use the function raster
+                        archive = archivekNNAge,
+                        #Extract other files with similar names
+                        alsoExtract = "similar",
+                        #save the file to a folder in the working directory
+                        #called forestClassRasters
+                        destinationPath = downloadFolderForestClass, 
+                        #use the function raster
+                        fun = "raster::raster", 
                         #targetCRS = crs(rasterToMatch),
-                        rasterToMatch = rasterToMatch, #use the specified rasterToMatch to reproject to
+                        #use the specified rasterToMatch to reproject to
+                        rasterToMatch = rasterToMatch, 
                         studyArea = studyArea,
                         overwrite = TRUE,
                         verbose = TRUE)
@@ -301,7 +350,8 @@ ageRaster <- cover(x = forAgeRaster,
 
 names(ageRaster) <- c("ageRaster")
 
-plot(ageRaster) #visually check nonForRaster
+#visually check nonForRaster
+plot(ageRaster) 
 
 ```
 
@@ -317,39 +367,53 @@ To do this we first define a function to download rasters for the chosen bird sp
 ```{r functionDownload250mBootRasters}
 download250mBootRasters <-
   function(folderUrl, birdsList, rastersPath) {
-    ## drive_ls function is used to list all the files it finds using the folder url with the given pattern
+    ## drive_ls function is used to list all the 
+    ##files it finds using the folder url with the given pattern
     filesToDownload <-
-      googledrive::drive_ls(path = as_id(folderUrl)) #note: has to be changed if filenaming system changes
-    ## grepl function searches for all items in the filesToDownload that are on birdList & stores their names in rastersforBirdList
+      googledrive::drive_ls(path = as_id(folderUrl)) 
+    #note: has to be changed if filenaming system changes
+    ## grepl function searches for all items in the 
+    ##filesToDownload that are on birdList & stores their 
+    ##names in rastersforBirdList
     rastersForBirdList <-
-      filesToDownload$name[grepl(pattern = paste(birdsList, collapse = "|"),
+      filesToDownload$name[grepl(pattern = paste(birdsList, 
+                                                 collapse = "|"),
                                  x = filesToDownload$name)]
     
-    ## for each item in turn from rastersForBirdlist the following function is applied:
+    ## for each item in turn from rastersForBirdlist 
+    #the following function is applied:
     downloadedRasters <-
       lapply(
         X = rastersForBirdList,
         FUN = function(rasterFile) {
-          ## if the item in rastersForBirdList is not already present at rastersPath, googledrive package downloads it
+          ## if the item in rastersForBirdList is 
+          #not already present at rastersPath, googledrive 
+          #package downloads it
           if (!file.exists(file.path(rastersPath, rasterFile))) {
             googledrive::drive_download(
               file = as_id(filesToDownload[filesToDownload$name %in% rasterFile,]$id),
               #rasterFile,
-              path = file.path(rastersPath, rasterFile),
+              path = file.path(rastersPath, 
+                               rasterFile),
               overwrite = TRUE
             )
           }
           
-          ## otherwise, if it is already present and downloaded, just get the name of the item
-          return(raster(file.path(rastersPath, rasterFile), verbose = TRUE))
+          ## otherwise, if it is already present 
+          ##and downloaded, just get the name of the item
+          return(raster(file.path(rastersPath, rasterFile), 
+                        verbose = TRUE))
         }
       )
     
-    #get the species codes as names for the downloadedRasters object, rather than using the whole filepath
+    #get the species codes as names for the 
+    ##downloadedRasters object, rather than using the whole filepath
     X <-
-      lapply(rastersForBirdList, substr, 1, 8) #works for strings of the form "varsXXXX" or "meanXXXX"
+      lapply(rastersForBirdList, substr, 1, 8) 
+     #works for strings of the form "varsXXXX" or "meanXXXX"
     names(downloadedRasters) <- X
-    #the downloadBirdDensityRasters function returns/loads the downloaded rasters
+    #the downloadBirdDensityRasters function returns/loads 
+    #the downloaded rasters
     return(downloadedRasters)
   }
 ```
@@ -363,16 +427,22 @@ load250mBootRasters <- function(birdsList,
                                 rasterToMatch,
                                 studyArea) {
   reproducible::Require("raster")
-  ## check that there is a folder at the given rastersPath. if not, create it. 
-  rastersPath <- checkPath(file.path(rastersPath), create = TRUE) 
-  ## download the rasters on the birdList. Return List of downloaded files.
+  ## check that there is a folder at the given rastersPath. 
+  #if not, create it. 
+  rastersPath <- checkPath(file.path(rastersPath), 
+                           create = TRUE) 
+  ## download the rasters on the birdList. 
+  #Return List of downloaded files.
   downloadedRasters <- download250mBootRasters(folderUrl = folderUrl,  
                                                birdsList = birdsList,
                                                rastersPath = rastersPath)
 
   ## lapply applys the custom function to each raster in turn
-  postprocessedRasters <- lapply(X = downloadedRasters, FUN = function(RasterLayer) {
-    ## the function postProcesses the layer, cropping and masking it to a given study area and rasterToMatch, and saving it to a given destination path
+  postprocessedRasters <- lapply(X = downloadedRasters, 
+                                 FUN = function(RasterLayer) {
+    ## the function postProcesses the layer, cropping 
+    ## and masking it to a given study area and rasterToMatch, 
+    ## and saving it to a given destination path
     proRaster <- postProcess(RasterLayer, 
                              studyArea = studyArea,
                              rasterToMatch = rasterToMatch,
@@ -392,8 +462,9 @@ We also download a table giving the number of bootstrapped replicates that exist
 
 ```{r callLoad250mBootFunction}
 #Specify which bird species to examine/input
-birdsList <- c("BAWW", "OVEN") #, "CAWA", "ALFL", "AMCR", "AMGO", "AMPI", "AMRE", "AMRO", "ATSP", "ATTW", "BANS", "BAOR", "BARS", "BBMA", "BBWA", "BBWO", "BCCH", "BEKI", "BGGN", "BHCO", "BHVI", "BLBW", "BLJA", "BLPW", "BOBO", "BOCH", "BOWA", "BRBL", "BRCR", "BRTH", "BTBW", "BTNW", "BWWA",  "CCSP", "CEDW", "CHSP", "CLSW", "CMWA", "COGR", "CONW", "CORA", "COYE", "CSWA", "DEJU", "DOWO", "DUFL", "DUNL", "EABL", "EAKI", "EAPH", "EATO", "EAWP", "EUST", "EVGR", "FISP", "FOSP", "GCFL", "GCKI", "GCSP", "GCTH", "GRAJ", "GRCA", "GRSP", "GRYE", "GWWA", "HAFL", "HAWO", "HETH", "HOLA", "HOSP", "HOWR", "INBU", "KILL", "LALO", "LCSP", "LEFL", "LEYE", "LISP", "MAWA", "MOBL", "MODO", "MOWA", "NAWA", "NESP", "NOCA", "NOFL", "NOPA", "NOWA", "OCWA", "OSFL", "PAWA", "PHVI", "PIGR", "PISI", "PIWA", "PIWO", "PUFI", "RBGR", "RBNU", "RBWO", "RCKI", "RECR", "REVI", "RHWO", "ROPI", "RTHU", "RUBL", "RUGR", "RWBL", "SAVS", "SCTA", "SEWR", "SOGR", "SOSA", "SOSP", "SPGR", "SPSA", "SWSP", "SWTH", "TEWA", "TOSO", "TOWA", "TRES", "UPSA", "VATH", "VEER", "VESP", "WAVI", "WBNU", "WCSP", "WETA", "WEWP", "WIPT", "WISN", "WITU", "WIWA", "WIWR", "WOTH", "WTSP", "WWCR", "YBCU", "YBFL", "YBSA", "YEWA", "YHBL", "YRWA")
-folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
+birdsList <- c("BAWW", "OVEN") 
+# give file location
+folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA"  
 
 birdRasterStack <- load250mBootRasters(folderUrl = folderUrlBird,
                                               birdsList = birdsList,
@@ -403,7 +474,8 @@ birdRasterStack <- load250mBootRasters(folderUrl = folderUrlBird,
 
 noBootsDFLocation <- "https://drive.google.com/file/d/1ldESo9gb6icRD8ZsuPgaEDSIwFjJEe4W"
 noBootsDF <- drive_download(file = noBootsDFLocation, 
-                            path = file.path(downloadFolderBird, "noBootsDF"),
+                            path = file.path(downloadFolderBird, 
+                                             "noBootsDF"),
                             type = "spreadsheet",
                             overwrite = TRUE)
 ```
@@ -422,7 +494,8 @@ Here the data for each cell's mean bird density and variance between bootstrap r
 
 ```{r functionGetBirdDataset}
 
-getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
+getBirdDataset <- function(birdRasterStack, 
+                           landscapeClassesRasterStack) {
   reproducible::Require("raster")
 
   meanBirdRasters <- names(birdRasterStack) %>% 
@@ -430,20 +503,30 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
                           keep(birdRasterStack, .)
   namesMeanBirdRasters <- names(meanBirdRasters)
   
-  birdDatasets <- lapply(X = meanBirdRasters, FUN = function(birdRasterLayer) {
+  birdDatasets <- lapply(X = meanBirdRasters, 
+                         FUN = function(birdRasterLayer) {
     
     landBirdRasterStack <- raster::addLayer(birdRasterLayer, landscapeClassesRasterStack)
     
     
-    ## take the values from the rasters and input them to a data table called cellValues
+    ## take the values from the rasters and input 
+    ## them to a data table called cellValues
     cellValues <- data.table(getValues(landBirdRasterStack))
-    cellValues <- setnames(cellValues, c( "birdDensity", "landForClass", "age", "forestedStatus"))
-    cellValues <- unite(cellValues, uniqueClasses, c(forestedStatus, landForClass), remove=FALSE)
+    cellValues <- setnames(cellValues, c( "birdDensity", 
+                                          "landForClass", 
+                                          "age", 
+                                          "forestedStatus"))
+    cellValues <- unite(cellValues, 
+                        uniqueClasses, 
+                        c(forestedStatus, 
+                          landForClass), 
+                        remove=FALSE)
     
     #get rid of any rows with NA values
     cellValues <- na.omit(cellValues) 
     
-    ## make sure landForClass and forestedStatus are categorical rather than numerical
+    ## make sure landForClass and forestedStatus 
+    ## are categorical rather than numerical
     cellValues$landForClass <- as.factor(cellValues$landForClass) 
     cellValues$forestedStatus <- as.factor(cellValues$forestedStatus)
     cellValues$uniqueClasses <- as.factor(cellValues$uniqueClasses)
@@ -459,16 +542,21 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
 
 ```{r getBirdDataset}
 
-landscapeRastersStack <- raster::stack(landscapeRaster, ageRaster, FNFRaster)
+landscapeRastersStack <- raster::stack(landscapeRaster, 
+                                       ageRaster, 
+                                       FNFRaster)
 
 birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
                                landscapeClassesRasterStack = landscapeRastersStack )
 
 for (i in names(birdDatasets)) {
-  attr(birdDatasets[[i]],"Species") <- i ## attr(birdDatasets$OVEN, "Species")
+  attr(birdDatasets[[i]],"Species") <- i 
+  ## attr(birdDatasets$OVEN, "Species")
 }
 
-head(birdDatasets$meanOVEN) #demonstrate what the first few lines of one of the birdDatasets looks like
+## demonstrate what the first few lines of 
+## one of the birdDatasets looks like
+head(birdDatasets$meanOVEN) 
 ```
 
 
@@ -481,20 +569,45 @@ head(birdDatasets$meanOVEN) #demonstrate what the first few lines of one of the 
 getBirdStatsByClass <- function(birdDatasets) {
   namesBirdsAnalysed <- names(birdDatasets) 
   #base::attr()
-  birdStatsByClass <- lapply(X = birdDatasets, FUN = function(singleBirdDataset) {
-    print(attr(singleBirdDataset, "Species")) ## TODO: use messages
-    flush.console() ## TODO: remove!
-    birdStats <- singleBirdDataset[order(-forestedStatus, landForClass) # order the rows by the land cover class
-                                   ][,list(classCount = .N, # get the number of cells each cover class
-                                           #meanBirdDensity = mean(birdDensity), # get the mean bird density for each cover class
-                                           meanBirdDensity = mean(birdDensity), #try log of mean bird density
-                                           varBirdDensity = var(birdDensity), # get the variance for bird density for each cover class
-                                           seBirdDensity = std.error(birdDensity), # get the standard error for bird density for each cover class
-                                           normality = tryCatch(ad.test(birdDensity)$p.value,error = function(cond) { return(NaN) }), #ifelse(mean(birdDensity) > 0, tryCatch(ad.test(birdDensity)$p.value,error = function(cond){return(NA)}), NA),
+  birdStatsByClass <- lapply(X = birdDatasets, 
+                             FUN = function(singleBirdDataset) {
+    print(attr(singleBirdDataset, 
+               "Species")) 
+    ## TODO: use messages
+    flush.console() 
+    ## TODO: remove!
+    birdStats <- singleBirdDataset[order(-forestedStatus, 
+                                         landForClass) 
+                                   # order the rows by the land cover class
+                                   ][,list(classCount = .N, 
+                                           # get the number of cells 
+                                           # each cover class
+                                           #meanBirdDensity = mean(birdDensity), 
+                                           # get the mean bird density 
+                                           #for each cover class
+                                           meanBirdDensity = mean(birdDensity),
+                                           #try log of mean bird density
+                                           varBirdDensity = var(birdDensity), 
+                                           # get the variance for bird density
+                                           # for each cover class
+                                           seBirdDensity = std.error(birdDensity), 
+                                           # get the standard error
+                                           #for bird density 
+                                           # for each cover class
+                                           normality = tryCatch(ad.test(birdDensity)$p.value, 
+                                                                error = function(cond) { return(NaN) }),
+#ifelse(mean(birdDensity) > 0,                                    
+#tryCatch(ad.test(birdDensity)$p.value,
+#error = function(cond){return(NA)}), NA),
                                            unimodality =   dip.test(birdDensity)$p.value),
-                                     by = list(forestedStatus, landForClass)]
+                                     by = list(forestedStatus, 
+                                               landForClass)]
     
-    birdStats <- unite(birdStats, uniqueClasses, c(forestedStatus, landForClass), remove=FALSE)
+    birdStats <- unite(birdStats, 
+                       uniqueClasses, 
+                       c(forestedStatus, 
+                         landForClass), 
+                       remove=FALSE)
 
     return(birdStats)
   })
@@ -509,10 +622,13 @@ getBirdStatsByClass <- function(birdDatasets) {
 birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
 
 for (i in names(birdStatsByClass)) {
-  attr(birdStatsByClass[[i]], "Species") <- i
-} ## TODO: don't repeat yourself. if you need to do the same thing multiple times, use a function
+  attr(birdStatsByClass[[i]], 
+       "Species") <- i
+T} 
 
-head(birdStatsByClass$meanOVEN) #demonstrate what first lines of a birdStatsByClass df looks like
+#demonstrate what first lines of a birdStatsByClass 
+# df looks like
+head(birdStatsByClass$meanOVEN) 
 ```
 
 
@@ -526,9 +642,12 @@ head(birdStatsByClass$meanOVEN) #demonstrate what first lines of a birdStatsByCl
 getAssumptionsSummary <- function(birdStatsTables) {
   namesBirdsAnalysed <- names(birdStatsTables) 
   
-  byBirdAssumptions <- lapply(birdStatsTables, FUN = function(x) {
-    print(attr(x, "Species")) ## TODO: use messages
-    flush.console() ## TODO: remove
+  byBirdAssumptions <- lapply(birdStatsTables, 
+                              FUN = function(x) {
+    print(attr(x, "Species")) 
+    ## TODO: use messages
+    flush.console() 
+    ## TODO: remove
     
     ## Normality Proportion 
     norm <- length(x$normality[!is.na(x$normality)])
@@ -553,7 +672,9 @@ getAssumptionsSummary <- function(birdStatsTables) {
   names(byBirdAssumptions) <- namesBirdsAnalysed
   numberOfSpecies <- length(byBirdAssumptions) 
   
-  birdAssumpTab <- rbindlist(byBirdAssumptions, use.names = TRUE, idcol = "birdSp")
+  birdAssumpTab <- rbindlist(byBirdAssumptions, 
+                             use.names = TRUE, 
+                             idcol = "birdSp")
   
   ## proportion of species where > 50% cover types are normal
   numberOfSpeciesNorm <- length(birdAssumpTab$propNormal[!is.na(birdAssumpTab$propNormal)]) 
@@ -572,7 +693,7 @@ getAssumptionsSummary <- function(birdStatsTables) {
 ```{r getAssumptionsSummary}
 assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 
-assumptionsSummary
+head(assumptionsSummary)
 ```
 
 
@@ -585,19 +706,26 @@ assumptionsSummary
 plotsMeanBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
                                 
-plotMeanBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = meanBirdDensity, fill = forestedStatus)) +
-    geom_bar(stat = "identity", width = 0.7) +
+plotMeanBirdDensity <- ggplot(data = singleBirdStats, 
+                              aes(x = uniqueClasses, 
+                                  y = meanBirdDensity,
+                                  fill = forestedStatus)) +
+    geom_bar(stat = "identity", 
+             width = 0.7) +
     theme_classic() +
     ggtitle(paste0("Mean bird density by cover class")) +
     xlab("Cover Class") +
     theme(axis.text = element_text(size = 6)) +
-    geom_errorbar(aes(ymin = meanBirdDensity - seBirdDensity, ymax = meanBirdDensity + seBirdDensity), width = .15) 
+    geom_errorbar(aes(ymin = meanBirdDensity - seBirdDensity, 
+                      ymax = meanBirdDensity + seBirdDensity), 
+                  width = .15) 
  
 return(plotMeanBirdDensity)
 
 })
 
-plotsMeanBirdDensity$meanOVEN #show an example
+#show an example
+plotsMeanBirdDensity$meanOVEN 
 ```
 
 
@@ -610,18 +738,23 @@ plotsMeanBirdDensity$meanOVEN #show an example
 plotsVarBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
 
-plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
+plotVarBirdDensity <- ggplot(data = singleBirdStats, 
+                             aes(x =uniqueClasses, 
+                                 y = varBirdDensity, 
+                                 fill = forestedStatus)) + 
    theme_classic() +
   ggtitle(paste0("Variance in bird density by cover class")) +
   xlab("Cover Class") +
     theme(axis.text = element_text(size = 6)) +
-  geom_bar(stat = "identity", width = 0.7) 
+  geom_bar(stat = "identity", 
+           width = 0.7) 
 
 return(plotVarBirdDensity)
 
 })
 
-plotsVarBirdDensity$meanOVEN #show an example
+#show an example
+plotsVarBirdDensity$meanOVEN 
 ```
 
 
@@ -635,9 +768,11 @@ plotsVarBirdDensity$meanOVEN #show an example
 getKernelDensityData <- function(birdDatasets) {
   namesBirdsAnalysed <- names(birdDatasets) 
   
-  birdKernelDensities <- lapply(X = birdDatasets, FUN = function(singleBirdDataset) {
+  birdKernelDensities <- lapply(X = birdDatasets, 
+                                FUN = function(singleBirdDataset) {
     namesClasses <- levels(singleBirdDataset$uniqueClasses)
-      classKernelDensities <- lapply(X = namesClasses, FUN = function(coverType) {
+      classKernelDensities <- lapply(X = namesClasses, 
+                                     FUN = function(coverType) {
       dataForDensity <- singleBirdDataset[uniqueClasses == coverType]
       singleClassDensity <- density(dataForDensity[,birdDensity])
       
@@ -659,22 +794,35 @@ kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
 
 
 
-#### Plot an Example Kernel Density Data
+### Plot an Example Kernel Density Data
 
-```{r getKernelDensityPlotFunction}
-getKernelDensityPlot <- function(birdCoverDensity, birdName, coverType, meanData) {
+
+```{r getKernelDensityPlotFunction, echo=TRUE}
+getKernelDensityPlot <- function(birdCoverDensity, 
+                                 birdName, 
+                                 coverType, 
+                                 meanData) {
   densityPlot <- plot(birdCoverDensity,
-                      main = paste0("Kernel Density for ", paste0(birdName), " in CC", coverType),
+                      main = paste0("Kernel Density for ", 
+                                    paste0(birdName), 
+                                    " in CC", 
+                                    coverType),
                       xlab = "Predicted Bird Density",
                       ylab = "Density of predictions") 
   return(densityPlot)
 }
 ```
 
-```{r getKernelDensityPlot}
-kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
-                                          coverType = "7, forested", #cover type name for title
-                                          birdCoverDensity = kernelDensityData$meanOVEN$"1_7") #which kernel density cover type and bird species to plot 
+```{r getKernelDensityPlot, echo=TRUE}
+
+#which kernel density cover
+#type and bird species to plot 
+kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", 
+                                          #sp name for title
+                                          coverType = "7, forested", 
+                                          #cover type name for title
+                                          birdCoverDensity = kernelDensityData$meanOVEN$"1_7") 
+
 ```
 
 
