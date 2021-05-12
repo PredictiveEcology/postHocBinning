@@ -13,7 +13,7 @@ editor_options:
 # Overview
 
 
-This module calculates predicted bird densities from the mean of the most recent bootstrapped Boreal Avian Modelling Project national models of bird density rasters (at 250m resolution), for each of a given set of cover and age classes according to two different methods:
+This module calculates predicted bird densities from the mean of the most recent bootstrapped Boreal Avian Modelling (BAM) Project national models of bird density rasters (at 250m resolution), for each of a given set of cover and age classes according to two different methods:
   - 1D, where a single variable, underlying cover class, is used to bin data points of predicted bird density, by calculating the mean. This method is used for both forested and non-forested cover classes.
   - 2D, where a gbm is used to give a predicted bird density according the combination of two variables, cover class and age. The predicted bird densities are then further binned according to the mean value of the desired age classes. This method is used for forested cover classes only.
   - Model statistics, such as unimodality, normality and variance are generated.
@@ -22,7 +22,8 @@ This module calculates predicted bird densities from the mean of the most recent
 
 # Parameters
 
-Provide a summary of user-visible parameters.
+ageGrouping - how many years included per age class
+maxAgeClass - how many age classes to include
 
 
 # Events
@@ -48,6 +49,7 @@ Description of the module outputs.
 
 ### 1D binning
 
+assumptionsSummary - 
 
 ### 2D binning
 
