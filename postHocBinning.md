@@ -112,7 +112,9 @@ Write what is saved.
 
 This module uses the outputs from [bootRasterCombine](https://github.com/ilaneshaw/bootRasterCombine), so it's expected that you have run this module, or have access to its outputs.
 
-<!-- TODO: move everything below here into module code, e.g. defaults -->
+<!-- TODO: move everything below here into module code, e.g. defaults, and remove -->
+
+# OLD -- do not use
 
 
 ```r
@@ -130,21 +132,7 @@ noBootsDF <- drive_download(file = noBootsDFLocation,
                             path = file.path(downloadFolderBird, "noBootsDF"),
                             type = "spreadsheet",
                             overwrite = TRUE)
-```
 
-# Create data table of bird density by landscape
-
-A `data.table` is created, containing the number of cells of each land cover class that are found in the `landscapeRaster`, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
-
-The first step is to gather the values from the rasters and create a clean dataset.
-We then  calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
-
-## Get bird dataset
-
-Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`.
-
-
-```r
 getBirdDataset <- function(birdRasterStack, categoriesRaster) {
   reproducible::Require("raster")
   
@@ -171,48 +159,28 @@ getBirdDataset <- function(birdRasterStack, categoriesRaster) {
 
   return(birdDatasets)
 }
-```
 
-
-```r
 birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
                                categoriesRaster = landscapeRaster)
 
 for (i in names(birdDatasets)) {
   attr(birdDatasets[[i]], "Species") <- i ## attr(birdDatasets$OVEN, "Species")
 }
-```
 
-
-```r
 birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
 
 for (i in names(birdStatsByClass)) {
   attr(birdStatsByClass[[i]], "Species") <- i
 }
-```
 
-
-```r
 assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
-```
 
-
-```r
 kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
-```
 
-
-```r
 kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
                                           coverType = "7, forested", #cover type name for title
                                           birdCoverDensity = kernelDensityData$meanOVEN$"1_7")
-```
 
-### Plot variance in bird density by cover class 
-
-
-```r
 plotsVarBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
 plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
@@ -227,7 +195,7 @@ plotsVarBirdDensity$meanOVEN #show an example
 ```
 
 
-# 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
+## 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
 
 This is carried out for forested cover classes only.
  
@@ -298,7 +266,6 @@ ageClassDefs <- cbind(ages,ageClasses)
 birdPreds <- list(birdMatricies, nonforBirdPreds, ageGrouping) 
 names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassDefs")
 ```
-
 
 # References
 

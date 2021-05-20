@@ -361,7 +361,10 @@ mySimOut &lt;- simInitAndSpades(times = times, params = parameters, modules = mo
 <div id="links-to-other-modules" class="section level1">
 <h1>Links to other modules</h1>
 <p>This module uses the outputs from <a href="https://github.com/ilaneshaw/bootRasterCombine">bootRasterCombine</a>, so it’s expected that you have run this module, or have access to its outputs.</p>
-<!-- TODO: move everything below here into module code, e.g. defaults -->
+<!-- TODO: move everything below here into module code, e.g. defaults, and remove -->
+</div>
+<div id="old-do-not-use" class="section level1">
+<h1>OLD – do not use</h1>
 <pre class="r"><code>birdsList &lt;- c(&quot;BAWW&quot;, &quot;OVEN&quot;) #specify the bird species
 folderUrlBird &lt;- &quot;https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA&quot; # give file location 
 
@@ -375,16 +378,9 @@ noBootsDFLocation &lt;- &quot;https://drive.google.com/file/d/1ldESo9gb6icRD8Zsu
 noBootsDF &lt;- drive_download(file = noBootsDFLocation, 
                             path = file.path(downloadFolderBird, &quot;noBootsDF&quot;),
                             type = &quot;spreadsheet&quot;,
-                            overwrite = TRUE)</code></pre>
-</div>
-<div id="create-data-table-of-bird-density-by-landscape" class="section level1">
-<h1>Create data table of bird density by landscape</h1>
-<p>A <code>data.table</code> is created, containing the number of cells of each land cover class that are found in the <code>landscapeRaster</code>, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density.</p>
-<p>The first step is to gather the values from the rasters and create a clean dataset. We then calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density.</p>
-<div id="get-bird-dataset" class="section level2">
-<h2>Get bird dataset</h2>
-<p>Here the data for each cell’s mean bird density and variance between bootstrap replicates is collected in a <code>data.table</code>.</p>
-<pre class="r"><code>getBirdDataset &lt;- function(birdRasterStack, categoriesRaster) {
+                            overwrite = TRUE)
+
+getBirdDataset &lt;- function(birdRasterStack, categoriesRaster) {
   reproducible::Require(&quot;raster&quot;)
   
   meanBirdRasters &lt;- names(birdRasterStack) %&gt;%
@@ -409,26 +405,30 @@ noBootsDF &lt;- drive_download(file = noBootsDFLocation,
   names(birdDatasets) &lt;- meanBirdRasters
 
   return(birdDatasets)
-}</code></pre>
-<pre class="r"><code>birdDatasets &lt;- getBirdDataset(birdRasterStack = birdRasterStack,
+}
+
+birdDatasets &lt;- getBirdDataset(birdRasterStack = birdRasterStack,
                                categoriesRaster = landscapeRaster)
 
 for (i in names(birdDatasets)) {
   attr(birdDatasets[[i]], &quot;Species&quot;) &lt;- i ## attr(birdDatasets$OVEN, &quot;Species&quot;)
-}</code></pre>
-<pre class="r"><code>birdStatsByClass &lt;- getBirdStatsByClass(birdDatasets = birdDatasets)
+}
+
+birdStatsByClass &lt;- getBirdStatsByClass(birdDatasets = birdDatasets)
 
 for (i in names(birdStatsByClass)) {
   attr(birdStatsByClass[[i]], &quot;Species&quot;) &lt;- i
-}</code></pre>
-<pre class="r"><code>assumptionsSummary &lt;- getAssumptionsSummary(birdStatsTables = birdStatsByClass)</code></pre>
-<pre class="r"><code>kernelDensityData &lt;- getKernelDensityData(birdDatasets = birdDatasets)</code></pre>
-<pre class="r"><code>kernelDensityPlot &lt;- getKernelDensityPlot(birdName = &quot;Ovenbird&quot;, #sp name for title
+}
+
+assumptionsSummary &lt;- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
+
+kernelDensityData &lt;- getKernelDensityData(birdDatasets = birdDatasets)
+
+kernelDensityPlot &lt;- getKernelDensityPlot(birdName = &quot;Ovenbird&quot;, #sp name for title
                                           coverType = &quot;7, forested&quot;, #cover type name for title
-                                          birdCoverDensity = kernelDensityData$meanOVEN$&quot;1_7&quot;)</code></pre>
-<div id="plot-variance-in-bird-density-by-cover-class" class="section level3">
-<h3>Plot variance in bird density by cover class</h3>
-<pre class="r"><code>plotsVarBirdDensity &lt;- lapply(X = birdStatsByClass,
+                                          birdCoverDensity = kernelDensityData$meanOVEN$&quot;1_7&quot;)
+
+plotsVarBirdDensity &lt;- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
 plotVarBirdDensity &lt;- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
    theme_classic() +
@@ -439,11 +439,8 @@ plotVarBirdDensity &lt;- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y
 return(plotVarBirdDensity)
 })
 plotsVarBirdDensity$meanOVEN #show an example</code></pre>
-</div>
-</div>
-</div>
-<div id="d-problem---using-brts-to-create-a-matrix-of-predicted-bird-density-by-age-and-cover-class" class="section level1">
-<h1>2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class</h1>
+<div id="d-problem---using-brts-to-create-a-matrix-of-predicted-bird-density-by-age-and-cover-class" class="section level2">
+<h2>2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class</h2>
 <p>This is carried out for forested cover classes only.</p>
 <pre class="r"><code>#define how you want the age classes to be (parameter)
 ageGrouping &lt;- 10 #how many years included per age class
@@ -501,6 +498,7 @@ ageClassDefs &lt;- cbind(ages,ageClasses)
 #make list object of all module outputs needed for Mapping Module 
 birdPreds &lt;- list(birdMatricies, nonforBirdPreds, ageGrouping) 
 names(birdPreds) &lt;- c(&quot;birdMatrices&quot;, &quot;nonforBirdPreds&quot;, &quot;ageClassDefs&quot;)</code></pre>
+</div>
 </div>
 </div>
 <div id="references" class="section level1">

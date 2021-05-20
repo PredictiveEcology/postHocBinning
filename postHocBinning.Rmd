@@ -87,9 +87,11 @@ knitr::kable(df_outputs)
 
 This module uses the outputs from [bootRasterCombine](https://github.com/ilaneshaw/bootRasterCombine), so it's expected that you have run this module, or have access to its outputs.
 
-<!-- TODO: move everything below here into module code, e.g. defaults -->
+<!-- TODO: move everything below here into module code, e.g. defaults, and remove -->
 
-```{r callLoad250mBootFunction}
+# OLD -- do not use
+
+```{r old-do-not-use, eval = FALSE}
 birdsList <- c("BAWW", "OVEN") #specify the bird species
 folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
 
@@ -104,20 +106,7 @@ noBootsDF <- drive_download(file = noBootsDFLocation,
                             path = file.path(downloadFolderBird, "noBootsDF"),
                             type = "spreadsheet",
                             overwrite = TRUE)
-```
 
-# Create data table of bird density by landscape
-
-A `data.table` is created, containing the number of cells of each land cover class that are found in the `landscapeRaster`, and the mean bird density for each land cover class, alongside the variance, and the standard error of this mean density. 
-
-The first step is to gather the values from the rasters and create a clean dataset.
-We then  calculate, for each cover class, the number of cells in this class, the mean bird density, and the variance and standard error for bird density. 
-
-## Get bird dataset
-
-Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`.
-
-```{r functionGetBirdDataset}
 getBirdDataset <- function(birdRasterStack, categoriesRaster) {
   reproducible::Require("raster")
   
@@ -144,42 +133,28 @@ getBirdDataset <- function(birdRasterStack, categoriesRaster) {
 
   return(birdDatasets)
 }
-```
 
-```{r getBirdDataset}
 birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
                                categoriesRaster = landscapeRaster)
 
 for (i in names(birdDatasets)) {
   attr(birdDatasets[[i]], "Species") <- i ## attr(birdDatasets$OVEN, "Species")
 }
-```
 
-```{r getBirdStatsbyClass}
 birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
 
 for (i in names(birdStatsByClass)) {
   attr(birdStatsByClass[[i]], "Species") <- i
 }
-```
 
-```{r getAssumptionsSummary}
 assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
-```
 
-```{r getKernelDensityData}
 kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
-```
 
-```{r getKernelDensityPlot}
 kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
                                           coverType = "7, forested", #cover type name for title
                                           birdCoverDensity = kernelDensityData$meanOVEN$"1_7")
-```
 
-### Plot variance in bird density by cover class 
-
-```{r plotVarBirdDensity}
 plotsVarBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
 plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
@@ -194,11 +169,11 @@ plotsVarBirdDensity$meanOVEN #show an example
 ```
 
 
-# 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
+## 2D problem - Using BRTs to create a matrix of predicted bird density by age and cover class
 
 This is carried out for forested cover classes only.
  
-```{r fitBRT }
+```{r old-do-not-use-fitBRT, eval = FALSE}
 #define how you want the age classes to be (parameter)
 ageGrouping <- 10 #how many years included per age class
 maxAgeClass <- 15 #what the oldest age class will be (everything older will be included in this class)
@@ -242,7 +217,7 @@ birdMatrix <- reshape2::acast(gbmPredDF,
 
 ### Gather together data to be output by module
 
-```{r separateNonForStat}
+```{r old-do-not-use-separateNonForStat, eval = FALSE}
 #get non-Forest 1D data together
 nonforBirdPreds <- lapply(X = birdStatsByClass, FUN = function(singleBirdDF) {
 #separate out data table rows that are forested, get rid of unnecessary forestedStatus column
@@ -253,7 +228,7 @@ return(nonforestedDF)
 })
 ```
 
-```{r packageOutputResults }
+```{r old-do-not-use-packageOutputResults, eval = FALSE}
 # create table defining age classes
 ages <- rep(1:(maxAgeClass*ageGrouping))
 ageClasses <- rep(1:maxAgeClass, each = ageGrouping)
@@ -262,7 +237,6 @@ ageClassDefs <- cbind(ages,ageClasses)
 birdPreds <- list(birdMatricies, nonforBirdPreds, ageGrouping) 
 names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassDefs")
 ```
-
 
 # References
 
