@@ -4,7 +4,7 @@ defineModule(sim, list(
   keywords = "",
   authors = c(
     person("Alex M.", "Chubaty", role = c("aut", "cre"), email = "achubaty@for-cast.ca"),
-    person("Isolde", "Lane-Shaw", role = "aut", email = ""), ## TODO: need email
+    person("Isolde", "Lane-Shaw", role = "aut", email = "") ## TODO: need email
   ),
   childModules = character(0),
   version = list(SpaDES.core = "1.0.6.9018", postHocBinning = "0.0.0.9000"),
@@ -12,9 +12,8 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "postHocBinning.Rmd")),
-  reqdPkgs = list("data.table", "diptest", "dplyr", "ggplot2", "ggpubr", "googledrive", "nortest",
-                  "plotrix",
-                  "raster", "rgdal", "sf", "sp",
+  reqdPkgs = list("data.table", "diptest", "dplyr", "gbm", "ggplot2", "ggpubr", "googledrive",
+                  "nortest", "plotrix", "raster", "rgdal", "sf", "sp",
                   "PredictiveEcology/LandR@development"), ## TODO: are all these used?
   parameters = rbind(
     defineParameter(".plots", "character", "screen", NA, NA,
@@ -33,6 +32,10 @@ defineModule(sim, list(
                           "and time are not relevant"))
   ),
   inputObjects = bindrows(
+    expectsInput(objectName = "forestClassRaster", objectClass = "RasterLayer",
+                 desc = "forest class raster (e.g., derived from LandR Biomass).", sourceURL = NA),
+    expectsInput(objectName = "landscapeRaster", objectClass = "RasterLayer",
+                 desc = "Land cover class raster, default LCC2005.", sourceURL = NA),
     expectsInput(objectName = "rasterToMatch", objectClass = "RasterLayer",
                  desc = "raster to match. default LCC2005.", sourceURL = NA),
     expectsInput(objectName = "studyArea", objectClass = "SpatialPolygonsDataFrame",
@@ -64,9 +67,7 @@ doEvent.postHocBinning = function(sim, eventTime, eventType) {
       # ! ----- EDIT BELOW ----- ! #
       # do stuff for this event
 
-      plotFun(sim) # example of a plotting function
       # schedule future event(s)
-
       # e.g.,
       #sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "postHocBinning", "plot")
 
@@ -132,33 +133,9 @@ Init <- function(sim) {
   return(invisible(sim))
 }
 
-### template for save events
-Save <- function(sim) {
-  # ! ----- EDIT BELOW ----- ! #
-  # do stuff for this event
-  sim <- saveFiles(sim)
-
-  # ! ----- STOP EDITING ----- ! #
-  return(invisible(sim))
-}
-
-### template for plot events
-plotFun <- function(sim) {
-  # ! ----- EDIT BELOW ----- ! #
-  # do stuff for this event
-  sampleData <- data.frame("TheSample" = sample(1:10, replace = TRUE))
-  Plots(sampleData, fn = ggplotFn)
-
-  # ! ----- STOP EDITING ----- ! #
-  return(invisible(sim))
-}
-
 ### template for your event1
 Event1 <- function(sim) {
   # ! ----- EDIT BELOW ----- ! #
-  # THE NEXT TWO LINES ARE FOR DUMMY UNIT TESTS; CHANGE OR DELETE THEM.
-  # sim$event1Test1 <- " this is test for event 1. " # for dummy unit test
-  # sim$event1Test2 <- 999 # for dummy unit test
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
@@ -167,9 +144,7 @@ Event1 <- function(sim) {
 ### template for your event2
 Event2 <- function(sim) {
   # ! ----- EDIT BELOW ----- ! #
-  # THE NEXT TWO LINES ARE FOR DUMMY UNIT TESTS; CHANGE OR DELETE THEM.
-  # sim$event2Test1 <- " this is test for event 2. " # for dummy unit test
-  # sim$event2Test2 <- 777  # for dummy unit test
+
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
@@ -185,25 +160,56 @@ Event2 <- function(sim) {
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
 
   if (!suppliedElsewhere("studyArea")) {
+    ## needs to align with default forestClassRaster extent below
     bcrzip <- "https://www.birdscanada.org/download/gislab/bcr_terrestrial_shape.zip"
     bcrshp <- Cache(prepInputs,
                     url = bcrzip,
                     destinationPath = dPath,
                     targetCRS = mod$targetCRS,
                     fun = "sf::st_read")
+    bcr6 <- bcrshp[bcrshp$BCR == 6, ]
 
-    sim$studyArea <- bcrshp[bcrshp$BCR == 11, ] ## 10 and 11 are relatively small
+    canProvs <- Cache(prepInputs,
+                      "GADM",
+                      fun = "base::readRDS",
+                      dlFun = "raster::getData",
+                      country = "CAN", level = 1, path = dPath,
+                      #targetCRS = targetCRS, ## TODO: fails on Windows
+                      targetFile = "gadm36_CAN_1_sp.rds", ## TODO: this will change as GADM data update
+                      destinationPath = dPath) %>%
+      st_as_sf(.) %>%
+      st_transform(., mod$targetCRS)
+    bcab <- canProvs[canProvs$NAME_1 %in% c("British Columbia", "Alberta"), ]
+
+    sim$studyArea <- postProcess(bcab, studyArea = bcr6, useSAcrs = TRUE,
+                                 filename2 = NULL, overwrite = TRUE) %>%
+      as_Spatial(.)
   }
 
   if (!suppliedElsewhere("rasterToMatch")) {
-    sim$rasterToMatch <- LandR::prepInputsLCC(year = 2005, destinationPath = dPath,
-                                              studyArea = sim$studyArea, filename2 = NULL)
+    sim$rasterToMatch <- Cache(prepInputsLCC, year = 2005, destinationPath = dPath,
+                               studyArea = sim$studyArea, filename2 = NULL)
+  }
+
+  if (!suppliedElsewhere("forestClassRaster")) {
+    urlForestClassRaster <- "https://drive.google.com/file/d/1cfrb-RhiwMD4XlS_yzRSQYPVh8ffwC0L" ## ABBC
+    sim$forestClassRaster <- Cache(prepInputs,
+                                   url = urlForestClassRaster,
+                                   destinationPath = dPath,
+                                   studyArea = sim$studyArea,
+                                   rasterToMatch = sim$rasterToMatch,
+                                   fun = "raster::raster")
+    sim$forestClassRaster[forestClassRaster == 0, ] <- NA
+  }
+
+  browser()
+  if (!suppliedElsewhere("nonForestClassRaster")) {
+     ## using LCC
   }
 
   if (!suppliedElsewhere("landscapeRaster")) {
-    sim$landscapeRaster <- LandR::prepInputsLCC(year = 2005, destinationPath = dPath,
-                                                studyArea = sim$studyArea, filename2 = NULL)
-    ## TODO: confirm this is cropped & masked to stuydArea
+    sim$landscapeRaster <- Cache(prepInputsLCC, year = 2005, destinationPath = dPath,
+                                 studyArea = sim$studyArea, filename2 = NULL) ## TODO: overlay F/NF ?????
   }
 
   # ! ----- STOP EDITING ----- ! #

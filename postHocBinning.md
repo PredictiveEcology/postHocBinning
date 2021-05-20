@@ -9,9 +9,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE, results = "hold")
-```
+
 
 # Overview
 
@@ -26,7 +24,8 @@ Model statistics, such as unimodality, normality and variance are generated.
 
 # Usage
 
-```{r module_usage}
+
+```r
 library(Require)
 Require("SpaDES.core")
 
@@ -50,10 +49,21 @@ mySimOut <- simInitAndSpades(times = times, params = parameters, modules = modul
 
 Provide a summary of user-visible parameters.
 
-```{r moduleParams, echo = FALSE, eval = TRUE}
-df_params <- SpaDES.core::moduleParams("postHocBinning", "..")
-knitr::kable(df_params)
+
 ```
+## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
+```
+
+
+
+|paramName        |paramClass |default    |min |max |paramDesc                                                                                                                                        |
+|:----------------|:----------|:----------|:---|:---|:------------------------------------------------------------------------------------------------------------------------------------------------|
+|.plots           |character  |screen     |NA  |NA  |Used by Plots function, which can be optionally used here                                                                                        |
+|.plotInitialTime |numeric    |start(sim) |NA  |NA  |Describes the simulation time at which the first plot event should occur.                                                                        |
+|.plotInterval    |numeric    |NA         |NA  |NA  |Describes the simulation time interval between plot events.                                                                                      |
+|.saveInitialTime |numeric    |NA         |NA  |NA  |Describes the simulation time at which the first save event should occur.                                                                        |
+|.saveInterval    |numeric    |NA         |NA  |NA  |This describes the simulation time interval between save events.                                                                                 |
+|.useCache        |logical    |FALSE      |NA  |NA  |Should caching of events or module be activated? This is generally intended for data-type modules, where stochasticity and time are not relevant |
 
 # Events
 
@@ -71,17 +81,32 @@ Write what is saved.
 
 ## Input data
 
-```{r moduleInputs, echo = FALSE, eval = TRUE}
-df_inputs <- SpaDES.core::moduleInputs("postHocBinning", "..")
-knitr::kable(df_inputs)
+
 ```
+## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
+```
+
+
+
+|objectName        |objectClass              |desc                                                    |sourceURL |
+|:-----------------|:------------------------|:-------------------------------------------------------|:---------|
+|forestClassRaster |RasterLayer              |forest class raster (e.g., derived from LandR Biomass). |NA        |
+|landscapeRaster   |RasterLayer              |Land cover class raster, default LCC2005.               |NA        |
+|rasterToMatch     |RasterLayer              |raster to match. default LCC2005.                       |NA        |
+|studyArea         |SpatialPolygonsDataFrame |study area polygon                                      |NA        |
 
 ## Output data
 
-```{r moduleOutputs, echo = FALSE, eval = TRUE}
-df_outputs <- SpaDES.core::moduleOutputs("postHocBinning", "..")
-knitr::kable(df_outputs)
+
 ```
+## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
+```
+
+
+
+|objectName |objectClass |desc |
+|:----------|:-----------|:----|
+|NA         |NA          |NA   |
 
 # Links to other modules
 
@@ -89,7 +114,8 @@ This module uses the outputs from [bootRasterCombine](https://github.com/ilanesh
 
 <!-- TODO: move everything below here into module code, e.g. defaults -->
 
-```{r callLoad250mBootFunction}
+
+```r
 birdsList <- c("BAWW", "OVEN") #specify the bird species
 folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
 
@@ -117,7 +143,8 @@ We then  calculate, for each cover class, the number of cells in this class, the
 
 Here the data for each cell's mean bird density and variance between bootstrap replicates is collected in a `data.table`.
 
-```{r functionGetBirdDataset}
+
+```r
 getBirdDataset <- function(birdRasterStack, categoriesRaster) {
   reproducible::Require("raster")
   
@@ -146,7 +173,8 @@ getBirdDataset <- function(birdRasterStack, categoriesRaster) {
 }
 ```
 
-```{r getBirdDataset}
+
+```r
 birdDatasets <- getBirdDataset(birdRasterStack = birdRasterStack,
                                categoriesRaster = landscapeRaster)
 
@@ -155,7 +183,8 @@ for (i in names(birdDatasets)) {
 }
 ```
 
-```{r getBirdStatsbyClass}
+
+```r
 birdStatsByClass <- getBirdStatsByClass(birdDatasets = birdDatasets)
 
 for (i in names(birdStatsByClass)) {
@@ -163,15 +192,18 @@ for (i in names(birdStatsByClass)) {
 }
 ```
 
-```{r getAssumptionsSummary}
+
+```r
 assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 ```
 
-```{r getKernelDensityData}
+
+```r
 kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
 ```
 
-```{r getKernelDensityPlot}
+
+```r
 kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for title
                                           coverType = "7, forested", #cover type name for title
                                           birdCoverDensity = kernelDensityData$meanOVEN$"1_7")
@@ -179,7 +211,8 @@ kernelDensityPlot <- getKernelDensityPlot(birdName = "Ovenbird", #sp name for ti
 
 ### Plot variance in bird density by cover class 
 
-```{r plotVarBirdDensity}
+
+```r
 plotsVarBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
 plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
@@ -198,7 +231,8 @@ plotsVarBirdDensity$meanOVEN #show an example
 
 This is carried out for forested cover classes only.
  
-```{r fitBRT }
+
+```r
 #define how you want the age classes to be (parameter)
 ageGrouping <- 10 #how many years included per age class
 maxAgeClass <- 15 #what the oldest age class will be (everything older will be included in this class)
@@ -242,7 +276,8 @@ birdMatrix <- reshape2::acast(gbmPredDF,
 
 ### Gather together data to be output by module
 
-```{r separateNonForStat}
+
+```r
 #get non-Forest 1D data together
 nonforBirdPreds <- lapply(X = birdStatsByClass, FUN = function(singleBirdDF) {
 #separate out data table rows that are forested, get rid of unnecessary forestedStatus column
@@ -253,7 +288,8 @@ return(nonforestedDF)
 })
 ```
 
-```{r packageOutputResults }
+
+```r
 # create table defining age classes
 ages <- rep(1:(maxAgeClass*ageGrouping))
 ageClasses <- rep(1:maxAgeClass, each = ageGrouping)
