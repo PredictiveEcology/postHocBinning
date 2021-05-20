@@ -4,7 +4,7 @@ defineModule(sim, list(
   keywords = "",
   authors = c(
     person("Alex M.", "Chubaty", role = c("aut", "cre"), email = "achubaty@for-cast.ca"),
-    person("Isolde", "Lane-Shaw", role = "aut", email = ""), ## TODO: need email
+    person("Isolde", "Lane-Shaw", role = "aut", email = "") ## TODO: need email
   ),
   childModules = character(0),
   version = list(SpaDES.core = "1.0.6.9018", postHocBinning = "0.0.0.9000"),

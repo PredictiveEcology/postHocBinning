@@ -9,9 +9,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE, results = "hold")
-```
+
 
 # Overview
 
@@ -19,7 +17,8 @@ This module predicts expected bird densities based on land cover classification.
 
 # Usage
 
-```{r module_usage}
+
+```r
 library(Require)
 Require("SpaDES.core")
 
@@ -43,10 +42,21 @@ mySimOut <- simInitAndSpades(times = times, params = parameters, modules = modul
 
 Provide a summary of user-visible parameters.
 
-```{r moduleParams, echo = FALSE, eval = TRUE}
-df_params <- SpaDES.core::moduleParams("postHocBinning", "..")
-knitr::kable(df_params)
+
 ```
+## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
+```
+
+
+
+|paramName        |paramClass |default    |min |max |paramDesc                                                                                                                                        |
+|:----------------|:----------|:----------|:---|:---|:------------------------------------------------------------------------------------------------------------------------------------------------|
+|.plots           |character  |screen     |NA  |NA  |Used by Plots function, which can be optionally used here                                                                                        |
+|.plotInitialTime |numeric    |start(sim) |NA  |NA  |Describes the simulation time at which the first plot event should occur.                                                                        |
+|.plotInterval    |numeric    |NA         |NA  |NA  |Describes the simulation time interval between plot events.                                                                                      |
+|.saveInitialTime |numeric    |NA         |NA  |NA  |Describes the simulation time at which the first save event should occur.                                                                        |
+|.saveInterval    |numeric    |NA         |NA  |NA  |This describes the simulation time interval between save events.                                                                                 |
+|.useCache        |logical    |FALSE      |NA  |NA  |Should caching of events or module be activated? This is generally intended for data-type modules, where stochasticity and time are not relevant |
 
 # Events
 
@@ -64,19 +74,32 @@ Write what is saved.
 
 ## Input data
 
-```{r moduleInputs, echo = FALSE, eval = TRUE}
-df_inputs <- SpaDES.core::moduleInputs("postHocBinning", "..")
-knitr::kable(df_inputs)
+
 ```
+## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
+```
+
+
+
+|objectName    |objectClass              |desc                              |sourceURL |
+|:-------------|:------------------------|:---------------------------------|:---------|
+|rasterToMatch |RasterLayer              |raster to match. default LCC2005. |NA        |
+|studyArea     |SpatialPolygonsDataFrame |study area polygon                |NA        |
 
 ## Output data
 
 Description of the module outputs.
 
-```{r moduleOutputs, echo = FALSE, eval = TRUE}
-df_outputs <- SpaDES.core::moduleOutputs("postHocBinning", "..")
-knitr::kable(df_outputs)
+
 ```
+## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
+```
+
+
+
+|objectName |objectClass |desc |
+|:----------|:-----------|:----|
+|NA         |NA          |NA   |
 
 # Links to other modules
 
@@ -86,7 +109,8 @@ Describe any anticipated linkages to other modules.
 
 # OLD -- do not use
 
-```{r old-do-not-use, eval = FALSE}
+
+```r
 birdsList <- c("BAWW", "OVEN") #specify the bird species
 folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
 
