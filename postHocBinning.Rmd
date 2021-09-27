@@ -430,7 +430,7 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
     ## take the values from the rasters and input them to a data table called cellValues
     cellValues <- data.table(getValues(landBirdRasterStack))
     cellValues <- setnames(cellValues, c( "birdDensity", "landForClass", "age", "forestedStatus"))
-    cellValues <- unite(cellValues, uniqueClasses, c(forestedStatus, landForClass), remove=FALSE)
+    cellValues <- unite(cellValues, uniqueLandClass, c(forestedStatus, landForClass), remove=FALSE)
     
     #get rid of any rows with NA values
     cellValues <- na.omit(cellValues) 
@@ -438,7 +438,7 @@ getBirdDataset <- function(birdRasterStack, landscapeClassesRasterStack) {
     ## make sure landForClass and forestedStatus are categorical rather than numerical
     cellValues$landForClass <- as.factor(cellValues$landForClass) 
     cellValues$forestedStatus <- as.factor(cellValues$forestedStatus)
-    cellValues$uniqueClasses <- as.factor(cellValues$uniqueClasses)
+    cellValues$uniqueLandClass <- as.factor(cellValues$uniqueLandClass)
     
     return(cellValues)
   })
@@ -485,7 +485,7 @@ getBirdStatsByClass <- function(birdDatasets) {
                                            unimodality =   dip.test(birdDensity)$p.value),
                                      by = list(forestedStatus, landForClass)]
     
-    birdStats <- unite(birdStats, uniqueClasses, c(forestedStatus, landForClass), remove=FALSE)
+    birdStats <- unite(birdStats, uniqueLandClass, c(forestedStatus, landForClass), remove=FALSE)
 
     return(birdStats)
   })
@@ -568,7 +568,7 @@ assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 plotsMeanBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
                                 
-plotMeanBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueClasses, y = meanBirdDensity, fill = forestedStatus)) +
+plotMeanBirdDensity <- ggplot(data = singleBirdStats, aes(x = uniqueLandClass, y = meanBirdDensity, fill = forestedStatus)) +
     geom_bar(stat = "identity", width = 0.7) +
     theme_classic() +
     ggtitle(paste0("Mean bird density by cover class")) +
@@ -590,7 +590,7 @@ plotsMeanBirdDensity$meanOVEN #show an example
 plotsVarBirdDensity <- lapply(X = birdStatsByClass,
                               FUN = function(singleBirdStats){
 
-plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =uniqueClasses, y = varBirdDensity, fill = forestedStatus)) + 
+plotVarBirdDensity <- ggplot(data = singleBirdStats, aes(x =uniqueLandClass, y = varBirdDensity, fill = forestedStatus)) + 
    theme_classic() +
   ggtitle(paste0("Variance in bird density by cover class")) +
   xlab("Cover Class") +
@@ -615,9 +615,9 @@ getKernelDensityData <- function(birdDatasets) {
   namesBirdsAnalysed <- names(birdDatasets) 
   
   birdKernelDensities <- lapply(X = birdDatasets, FUN = function(singleBirdDataset) {
-    namesClasses <- levels(singleBirdDataset$uniqueClasses)
+    namesClasses <- levels(singleBirdDataset$uniqueLandClass)
       classKernelDensities <- lapply(X = namesClasses, FUN = function(coverType) {
-      dataForDensity <- singleBirdDataset[uniqueClasses == coverType]
+      dataForDensity <- singleBirdDataset[uniqueLandClass == coverType]
       singleClassDensity <- density(dataForDensity[,birdDensity])
       
       return(singleClassDensity)
@@ -662,7 +662,7 @@ This is carried out for forested cover classes only.
  
 ```{r fitBRT }
 
-#define how you want the age classes to be (parameter)
+#PARAMETER: define how you want the age classes to be 
 ageGrouping <- 10 #how many years included per age class
 maxAgeClass <- 15 #what the oldest age class will be (everything older will be included in this class)
 
@@ -731,15 +731,89 @@ return(nonforestedDF)
 
 ```{r packageOutputResults }
 
+# create table defining age classes for forested areas
+
+#use the first data table on the birdDatasets list 
+singleBirdDT <- birdDatasets[[1]]
+
+#separate out data table rows that are forested
+forestedDT <- singleBirdDT[forestedStatus == "1"]
+forestedDT <- droplevels(forestedDT)
+
 # create table defining age classes
-ages <- rep(1:(maxAgeClass*ageGrouping))
-ageClasses <- rep(1:maxAgeClass, each = ageGrouping)
-ageClassDefs <- cbind(ages,ageClasses)
+maxAge <- max(forestedDT$age) #find max age of forest
+allAges <- c(0:maxAge) #make vector counting from 1 to to max age
+agesOverMaxAgeClass <- maxAge-(maxAgeClass*ageGrouping) 
+ageClasses <- c(1, rep(1:maxAgeClass, each = ageGrouping), rep(maxAgeClass, times = agesOverMaxAgeClass)) #make vector of age classes to correspond with the vector allAges
+ageClassDefs <- cbind(allAges,ageClasses) 
+ageClassDefs <- as.data.table(ageClassDefs) # put together in ageClassDefs data table
+ageClassDefs <- ageClassDefs[, ageClasses:=as.character(ageClasses)] 
 
 
-#make list object of all module outputs needed for Mapping Module 
+#make list object of all outputs needed for Mapping Module 
 birdPreds <- list(birdMatricies, nonforBirdPreds, ageClassDefs) 
 names(birdPreds) <- c("birdMatrices", "nonforBirdPreds", "ageClassDefs")
+
+```
+
+### Do Stats for 2D Binning
+
+```{r 2DStats }
+
+### PARAMETER: exclude any classes from table that have a sample size smaller than minStatsSample
+minStatsSample <- 100 
+
+#create birdStats2D (MODULE OUTPUT), a list of lists giving a birdStats2D data table and vector classesNotPresent for each bird species on the birdList.
+birdStats2D <- lapply(X = birdDatasets, FUN = function(singleBirdDT) {
+
+#separate out data table rows that are forested from the raw birdDataset 
+forestedDT <- singleBirdDT[forestedStatus == "1"]
+forestedDT <- droplevels(forestedDT)
+
+#get age classes for each row using the ageClassDefs table
+ageClass <- forestedDT[, age]
+ageClass <- as.data.table(ageClass)
+ageClass[] <- lapply(ageClass, function(x) ageClassDefs$ageClasses[match(x, ageClassDefs$allAges)])
+#add the ageClass to the forestedDT 
+birdDataNew <- cbind(forestedDT, ageClass)
+
+#create new column, landAgeClass, giving the uniqueLandClass and ageClass combined
+birdDataNew <- unite(birdDataNew, landAgeClass, c(uniqueLandClass, ageClass), sep= ".", remove=FALSE)
+
+#produce data table of statistics on the bird Data based on the 2D bins
+singleBirdStats2D <- birdDataNew[order(landAgeClass) # order the rows by the land cover class
+                                   ][,list(classCount = .N, # get the number of cells each cover class
+                                           meanBirdDensity = mean(birdDensity), #get mean bird density
+                                           varBirdDensity = var(birdDensity), # get the variance for bird density for each class
+                                           seBirdDensity = std.error(birdDensity), # get the standard error for bird density for each  class
+                                           normality = tryCatch(ad.test(birdDensity)$p.value,error = function(cond) { return(NaN) }), #ifelse(mean(birdDensity) > 0, tryCatch(ad.test(birdDensity)$p.value,error = function(cond){return(NA)}), NA),
+                                           unimodality =   dip.test(birdDensity)$p.value),
+                                     by = list(landAgeClass)]
+
+#exclude any classes from table that have a sample size smaller than minStatsSample, a parameter
+singleBirdStats2D <- subset(singleBirdStats2D, classCount > minStatsSample)
+
+#### get list of missing classes
+landAgeClassesPresent <- unique(singleBirdStats2D$landAgeClass) #get classes that are represented in birdStats2D
+
+#get all classes possible
+landClasses <- rep(unique(birdDataNew$uniqueLandClass), times = maxAgeClass)
+landClasses <- as.data.table(landClasses)
+ageClassReps <- rep(1:maxAgeClass, times = length(unique(birdDataNew$uniquelandClass)))
+ageClassReps <- as.data.table(ageClassReps)
+allPossibleClasses <- cbind(landClasses, ageClassReps)
+allPossibleClasses <-  unite(allPossibleClasses, allPossibleClasses, c(landClasses, ageClassReps), sep= ".", remove=FALSE) 
+
+#get the classes not present in birdStats2D
+classesNotPresent <- setdiff(allPossibleClasses$allPossibleClasses, landAgeClassesPresent)
+
+##make list object of all stats outputs 
+birdStatsList2D <- list(singleBirdStats2D, classesNotPresent)
+names(birdStatsList2D) <- c("birdStats2D", "classesNotPresent")
+
+return(birdStatsList2D)
+   
+    })
 
 ```
 
