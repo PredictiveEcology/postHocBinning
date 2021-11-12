@@ -122,17 +122,6 @@ getAssumptionsSummary <- function(birdStatsTables) {
   return(birdAssumptions)
 }
 
-plotsBirdStatsByClass <- lapply(X = birdStatsByClass, FUN = function(singleBirdStats) {
-  plotBirdStatsByClass <- ggplot(data = singleBirdStats, aes(x = landCoverClass, y = meanBirdDensity)) +
-    geom_bar(stat = "identity", width = 0.7, fill = "steelblue") +
-    theme_classic() +
-    ggtitle("Mean Ovenbird Density by Cover Class") +
-    theme(axis.text = element_text(size = 7)) +
-    geom_errorbar(aes(ymin = meanBirdDensity - seBirdDensity, ymax = meanBirdDensity + seBirdDensity), width = .15)
-
-  return(plotsBirdStatsByClass)
-})
-
 getKernelDensityData <- function(birdDatasets) {
   namesBirdsAnalysed <- names(birdDatasets)
 

@@ -12,11 +12,16 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "postHocBinning.Rmd")),
-  reqdPkgs = list("data.table", "diptest", "dplyr", "ggplot2", "ggpubr", "googledrive", "nortest",
-                  "plotrix",
-                  "raster", "rgdal", "sf", "sp",
+  reqdPkgs = list("data.table", "diptest", "dplyr", "ggplot2", "ggpubr", "googledrive",
+                  "nortest", "plotrix", "raster", "rgdal", "sf", "sp",
                   "PredictiveEcology/LandR@development"), ## TODO: are all these used?
   parameters = rbind(
+    defineParameter("ageClassWidth", "integer", 10L, NA, NA,
+                    "width of each age class/bin."),
+    defineParameter("ageMax", "integer", 200L, NA, NA,
+                    "Maximum forest age."),
+    defineParameter("birdSpecies", "character", NA, NA, NA,
+                    "vector of bird species codes (default NA, means 'all species available')"),
     defineParameter(".plots", "character", "screen", NA, NA,
                     "Used by Plots function, which can be optionally used here"),
     defineParameter(".plotInitialTime", "numeric", start(sim), NA, NA,
@@ -34,7 +39,7 @@ defineModule(sim, list(
   ),
   inputObjects = bindrows(
     expectsInput(objectName = "rasterToMatch", objectClass = "RasterLayer",
-                 desc = "raster to match. default LCC2005.", sourceURL = NA),
+                 desc = "raster to match.", sourceURL = NA),
     expectsInput(objectName = "studyArea", objectClass = "SpatialPolygonsDataFrame",
                  desc = "study area polygon", sourceURL = NA)
   ),
