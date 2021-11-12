@@ -10,6 +10,7 @@ on:
     paths:
       - postHocBinning.Rmd
       - postHocBinning.R
+      - .github/workflows/render-module-rmd.yaml
 
 name: Render module Rmd
 
@@ -57,7 +58,7 @@ jobs:
 
       - name: Install module package dependencies
         run: |
-          pkgs <- SpaDES.core::packages(modules = "postHocBinning", paths = "..")
+          pkgs <- SpaDES.core::packages(modules = "postHocBinning", paths = "..")[[1]]
           Require::Require(pkgs)
         shell: Rscript {0}
 
