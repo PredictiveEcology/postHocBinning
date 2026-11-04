@@ -25,7 +25,7 @@ Model statistics, such as unimodality, normality and variance are generated.
 # Usage
 
 
-```r
+``` r
 library(Require)
 Require("SpaDES.core")
 
@@ -45,25 +45,23 @@ outputs <- list()
 
 mySimOut <- simInitAndSpades(times = times, params = parameters, modules = modules, objects = objects)
 ```
+
 # Parameters
 
 Provide a summary of user-visible parameters.
 
 
-```
-## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
-```
-
-
-
-|paramName        |paramClass |default    |min |max |paramDesc                                                                                                                                        |
-|:----------------|:----------|:----------|:---|:---|:------------------------------------------------------------------------------------------------------------------------------------------------|
-|.plots           |character  |screen     |NA  |NA  |Used by Plots function, which can be optionally used here                                                                                        |
-|.plotInitialTime |numeric    |start(sim) |NA  |NA  |Describes the simulation time at which the first plot event should occur.                                                                        |
-|.plotInterval    |numeric    |NA         |NA  |NA  |Describes the simulation time interval between plot events.                                                                                      |
-|.saveInitialTime |numeric    |NA         |NA  |NA  |Describes the simulation time at which the first save event should occur.                                                                        |
-|.saveInterval    |numeric    |NA         |NA  |NA  |This describes the simulation time interval between save events.                                                                                 |
-|.useCache        |logical    |FALSE      |NA  |NA  |Should caching of events or module be activated? This is generally intended for data-type modules, where stochasticity and time are not relevant |
+|paramName        |paramClass |default |min |max |paramDesc                                                                                                                                        |cacheKey |
+|:----------------|:----------|:-------|:---|:---|:------------------------------------------------------------------------------------------------------------------------------------------------|:--------|
+|ageClassWidth    |integer    |10      |NA  |NA  |width of each age class/bin.                                                                                                                     |TRUE     |
+|ageMax           |integer    |200     |NA  |NA  |Maximum forest age.                                                                                                                              |TRUE     |
+|birdSpecies      |character  |NA      |NA  |NA  |vector of bird species codes (default NA, means 'all species available')                                                                         |TRUE     |
+|.plots           |character  |screen  |NA  |NA  |Used by Plots function, which can be optionally used here                                                                                        |TRUE     |
+|.plotInitialTime |numeric    |0       |NA  |NA  |Describes the simulation time at which the first plot event should occur.                                                                        |TRUE     |
+|.plotInterval    |numeric    |NA      |NA  |NA  |Describes the simulation time interval between plot events.                                                                                      |TRUE     |
+|.saveInitialTime |numeric    |NA      |NA  |NA  |Describes the simulation time at which the first save event should occur.                                                                        |TRUE     |
+|.saveInterval    |numeric    |NA      |NA  |NA  |This describes the simulation time interval between save events.                                                                                 |TRUE     |
+|.useCache        |logical    |FALSE   |NA  |NA  |Should caching of events or module be activated? This is generally intended for data-type modules, where stochasticity and time are not relevant |TRUE     |
 
 # Events
 
@@ -82,26 +80,14 @@ Write what is saved.
 ## Input data
 
 
-```
-## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
-```
-
-
-
 |objectName        |objectClass              |desc                                                    |sourceURL |
 |:-----------------|:------------------------|:-------------------------------------------------------|:---------|
 |forestClassRaster |RasterLayer              |forest class raster (e.g., derived from LandR Biomass). |NA        |
 |landscapeRaster   |RasterLayer              |Land cover class raster, default LCC2005.               |NA        |
-|rasterToMatch     |RasterLayer              |raster to match. default LCC2005.                       |NA        |
+|rasterToMatch     |RasterLayer              |raster to match.                                        |NA        |
 |studyArea         |SpatialPolygonsDataFrame |study area polygon                                      |NA        |
 
 ## Output data
-
-
-```
-## defineParameter: '.plotInitialTime' is not of specified type 'numeric'.
-```
-
 
 
 |objectName |objectClass |desc |
@@ -117,7 +103,7 @@ This module uses the outputs from [bootRasterCombine](https://github.com/ilanesh
 # OLD -- do not use
 
 
-```r
+``` r
 birdsList <- c("BAWW", "OVEN") #specify the bird species
 folderUrlBird <- "https://drive.google.com/drive/folders/1fCTr2P-3Bh-7Qh4W0SMJ_mT9rpsKvGEA" # give file location 
 
@@ -173,6 +159,17 @@ for (i in names(birdStatsByClass)) {
   attr(birdStatsByClass[[i]], "Species") <- i
 }
 
+plotsBirdStatsByClass <- lapply(X = birdStatsByClass, FUN = function(singleBirdStats) {
+  plotBirdStatsByClass <- ggplot(data = singleBirdStats, aes(x = landCoverClass, y = meanBirdDensity)) +
+    geom_bar(stat = "identity", width = 0.7, fill = "steelblue") +
+    theme_classic() +
+    ggtitle("Mean Ovenbird Density by Cover Class") +
+    theme(axis.text = element_text(size = 7)) +
+    geom_errorbar(aes(ymin = meanBirdDensity - seBirdDensity, ymax = meanBirdDensity + seBirdDensity), width = .15)
+
+  return(plotsBirdStatsByClass)
+})
+
 assumptionsSummary <- getAssumptionsSummary(birdStatsTables = birdStatsByClass)
 
 kernelDensityData <- getKernelDensityData(birdDatasets = birdDatasets)
@@ -200,7 +197,7 @@ plotsVarBirdDensity$meanOVEN #show an example
 This is carried out for forested cover classes only.
  
 
-```r
+``` r
 #define how you want the age classes to be (parameter)
 ageGrouping <- 10 #how many years included per age class
 maxAgeClass <- 15 #what the oldest age class will be (everything older will be included in this class)
@@ -245,7 +242,7 @@ birdMatrix <- reshape2::acast(gbmPredDF,
 ### Gather together data to be output by module
 
 
-```r
+``` r
 #get non-Forest 1D data together
 nonforBirdPreds <- lapply(X = birdStatsByClass, FUN = function(singleBirdDF) {
 #separate out data table rows that are forested, get rid of unnecessary forestedStatus column
@@ -257,7 +254,7 @@ return(nonforestedDF)
 ```
 
 
-```r
+``` r
 # create table defining age classes
 ages <- rep(1:(maxAgeClass*ageGrouping))
 ageClasses <- rep(1:maxAgeClass, each = ageGrouping)
