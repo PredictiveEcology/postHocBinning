@@ -12,7 +12,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "postHocBinning.Rmd")),
-  reqdPkgs = list("data.table", "diptest", "dplyr", "ggplot2", "ggpubr", "googledrive",
+  reqdPkgs = list("data.table", "diptest", "dplyr", "ggplot2", "ggpubr", "googledrive", "httr2",
                   "nortest", "plotrix", "raster", "rgdal", "sf", "sp",
                   "PredictiveEcology/LandR@development"), ## TODO: are all these used?
   parameters = rbind(
